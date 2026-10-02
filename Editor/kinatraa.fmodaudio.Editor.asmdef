@@ -1,0 +1,39 @@
+{
+    "name": "kinatraa.fmodaudio.Editor",
+    "rootNamespace": "kinatraa.fmodaudio.Editor",
+    "references": [
+        "kinatraa.fmodaudio",
+        "kinatraa.fmodaudio.bootstrap.Editor",
+        "FMODUnity",
+        "FMODUnityEditor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "KINATRAA_FMOD"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.modules.physics",
+            "expression": "1.0.0",
+            "define": "kinatraa_fmodaudio_physics"
+        },
+        {
+            "name": "com.unity.modules.physics2d",
+            "expression": "1.0.0",
+            "define": "kinatraa_fmodaudio_physics2d"
+        },
+        {
+            "name": "com.unity.modules.audio",
+            "expression": "1.0.0",
+            "define": "kinatraa_fmodaudio_unity_audio"
+        }
+    ],
+    "noEngineReferences": false
+}
