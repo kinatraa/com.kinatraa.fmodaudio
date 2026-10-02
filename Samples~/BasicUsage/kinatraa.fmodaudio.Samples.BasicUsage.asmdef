@@ -1,0 +1,18 @@
+{
+    "name": "kinatraa.fmodaudio.Samples.BasicUsage",
+    "rootNamespace": "kinatraa.fmodaudio.Samples",
+    "references": [
+        "kinatraa.fmodaudio"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "KINATRAA_FMOD"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
