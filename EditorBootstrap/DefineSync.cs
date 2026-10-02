@@ -81,6 +81,8 @@ namespace kinatraa.fmodaudio.Editor
             }
             if (changed > 0)
             {
+                // Persist ProjectSettings right away so a crash cannot leave a stale define behind.
+                EditorApplication.delayCall += AssetDatabase.SaveAssets;
                 Debug.Log(want
                     ? $"[kinatraa.fmodaudio] FMOD for Unity detected: added scripting define {FmodDetector.Define} to {changed} build target(s)."
                     : $"[kinatraa.fmodaudio] FMOD for Unity not found: removed scripting define {FmodDetector.Define} from {changed} build target(s).");
