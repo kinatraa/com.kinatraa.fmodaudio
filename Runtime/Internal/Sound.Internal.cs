@@ -297,6 +297,8 @@ namespace kinatraa.fmodaudio
             reapplyPause = false;
             pauseSnapshot = default;
             if (store is PlayerPrefsSoundSettingsStore) store = null;
+            if (config != null && (config.hideFlags & HideFlags.DontSave) != 0) UnityEngine.Object.Destroy(config); // in-memory defaults
+            config = null;
 
             GameObject go = root;
             root = null;

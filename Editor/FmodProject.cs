@@ -137,7 +137,31 @@ namespace kinatraa.fmodaudio.Editor
         /// <summary>True when the project was saved by a 2.03-line FMOD Studio ("Studio.02.03.xx").</summary>
         public bool IsStudio203 => SerializationModel != null && SerializationModel.StartsWith("Studio.02.03.", StringComparison.Ordinal);
 
+        private static readonly Dictionary<string, (int count, DateTime newest, StudioProjectInfo info)> cache =
+            new Dictionary<string, (int, DateTime, StudioProjectInfo)>();
+
+        /// <summary>Scans the project, reusing the previous result while no Metadata file was added, removed or modified.</summary>
         public static StudioProjectInfo Scan(string fsproPath)
+        {
+            string metadata = Path.Combine(Path.GetDirectoryName(fsproPath) ?? string.Empty, "Metadata");
+            int count = 0;
+            DateTime newest = File.Exists(fsproPath) ? File.GetLastWriteTimeUtc(fsproPath) : DateTime.MinValue;
+            if (Directory.Exists(metadata))
+            {
+                foreach (string file in Directory.EnumerateFiles(metadata, "*.xml", SearchOption.AllDirectories))
+                {
+                    count++;
+                    DateTime written = File.GetLastWriteTimeUtc(file);
+                    if (written > newest) newest = written;
+                }
+            }
+            if (cache.TryGetValue(fsproPath, out var hit) && hit.count == count && hit.newest == newest) return hit.info;
+            StudioProjectInfo info = Parse(fsproPath);
+            cache[fsproPath] = (count, newest, info);
+            return info;
+        }
+
+        private static StudioProjectInfo Parse(string fsproPath)
         {
             var info = new StudioProjectInfo { FsproPath = fsproPath };
             try

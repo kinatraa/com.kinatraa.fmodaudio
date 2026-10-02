@@ -51,6 +51,9 @@ public class Player : MonoBehaviour
 }
 ```
 
+Scripts in `Assembly-CSharp` need nothing else. **Scripts inside your own asmdef must reference both `kinatraa.fmodaudio`
+and `FMODUnity`** (C# needs FMODUnity to resolve the `Sound.Play(EventReference ...)` overloads).
+
 The system initializes itself before the first scene loads. To initialize manually, untick *Auto Initialize* in the
 config and call `Sound.Initialize(config)`.
 

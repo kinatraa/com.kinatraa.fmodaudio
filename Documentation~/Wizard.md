@@ -46,3 +46,5 @@ Notes for batch mode:
   check 7 reports it otherwise.
 - On a fresh clone where the define is not committed yet, the first batch run adds `KINATRAA_FMOD`; the FMOD checks
   appear on the next run (the define is normally committed in `ProjectSettings/ProjectSettings.asset`).
+- If FMOD was removed from a project whose committed settings still contain `KINATRAA_FMOD`, add `-ignorecompilererrors`
+  to the first batch run so the bootstrap can remove the stale define (see Troubleshooting).

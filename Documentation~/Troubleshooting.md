@@ -5,10 +5,17 @@ The package looks for the `FMODUnity` and `FMODUnityEditor` assembly definitions
 without asmdefs are not supported. Re-import FMOD for Unity 2.03.15.
 
 **Compile errors mentioning FMODUnity after removing FMOD.**
-The bootstrap removes `KINATRAA_FMOD` automatically after FMOD's asmdefs disappear (on import/delete and after every
-compilation). If FMOD was deleted while the editor was closed, Unity may offer Safe Mode on the next open: choose
-*Ignore*/*Exit Safe Mode*; the bootstrap compiles independently and removes the define, then everything recompiles. As a
-manual fallback remove `KINATRAA_FMOD` from Project Settings > Player > Scripting Define Symbols.
+Removing FMOD inside the editor is handled automatically: the bootstrap sees FMOD's asmdefs disappear, removes
+`KINATRAA_FMOD` from every build target, saves the project settings and Unity recompiles cleanly (verified).
+If FMOD disappears while the editor is closed (e.g. checking out a branch without FMOD), the committed define makes the
+package's FMOD assemblies fail to compile on the next open. As soon as Unity continues past those errors, the bootstrap
+assembly (which never references FMOD) loads and removes the define, and the next compile is clean:
+- Batch mode / CI: run once with `-ignorecompilererrors` (verified), or remove the define from `ProjectSettings/ProjectSettings.asset`.
+- Interactive editor: choose *Ignore* in Unity's Safe Mode prompt (this path was not tested), or remove the define in
+  Project Settings > Player > Scripting Define Symbols.
+
+**CS0012: "The type 'EventReference' is defined in an assembly that is not referenced".**
+Your script lives in an asmdef: add `FMODUnity` next to `kinatraa.fmodaudio` in its references.
 
 **Nothing plays, "Unknown cue id".**
 The cue's library is not registered: add it to the config's *Libraries* or call `Sound.RegisterLibrary(lib)`.

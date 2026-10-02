@@ -16,8 +16,8 @@ It does not ship FMOD and has no other dependencies. Without FMOD installed the 
 |---|---|---|
 | FMOD for Unity | **2.03.15** | Tested (runtime tests, wizard, player build) |
 | FMOD Studio (bank authoring) | **2.03.15** | Tested. Banks must be built with FMOD Studio from the same 2.03 line as FMOD for Unity |
-| Unity | 6000.3.13f1 (macOS) | Tested: compile matrix, wizard, 21 Play Mode tests + 1 Edit Mode test, macOS player build |
-| Unity | 6000.3.6f1 (macOS) | Tested: compiles without errors or warnings |
+| Unity | 6000.3.13f1 (macOS) | Tested: compile matrix (without FMOD, FMOD added later, FMOD removed, FMOD re-imported, next to another kinatraa audio package), wizard end to end, 21 Play Mode tests + 1 Edit Mode test (domain reload disabled), macOS Mono player build |
+| Unity | 6000.3.6f1 (macOS) | Tested: fresh project + FMOD + package compiles without errors or warnings, define added automatically |
 | Unity | 2021.3 LTS | Declared minimum (APIs chosen for it) but **not tested** |
 | FMOD for Unity 2.02 / 1.x | | **Not supported** |
 
