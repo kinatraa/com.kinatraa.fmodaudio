@@ -1,0 +1,10 @@
+# OS / IDE files. Unity .meta files must never be ignored: they are committed with every asset.
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user

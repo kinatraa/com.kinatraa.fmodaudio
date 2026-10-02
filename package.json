@@ -1,0 +1,36 @@
+{
+  "name": "com.kinatraa.fmodaudio",
+  "version": "1.0.0",
+  "displayName": "kinatraa FMOD Audio",
+  "description": "A safe, simple wrapper and tooling layer on top of FMOD for Unity: cue libraries, recycle-safe handles, music slot, bus volumes, snapshots, bank loading, pluggable settings/save hooks, a setup wizard that configures a project for FMOD, and editor tools (cue library window, id picker, constants generator, runtime debugger). Requires FMOD for Unity 2.03 (installed separately).",
+  "unity": "2021.3",
+  "author": {
+    "name": "kinatraa",
+    "url": "https://github.com/kinatraa"
+  },
+  "license": "MIT",
+  "documentationUrl": "https://github.com/kinatraa/com.kinatraa.fmodaudio/blob/main/Documentation~/GettingStarted.md",
+  "changelogUrl": "https://github.com/kinatraa/com.kinatraa.fmodaudio/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/kinatraa/com.kinatraa.fmodaudio/blob/main/LICENSE",
+  "keywords": [
+    "fmod",
+    "audio",
+    "sound",
+    "music",
+    "sfx",
+    "audio-manager",
+    "setup-wizard"
+  ],
+  "samples": [
+    {
+      "displayName": "Basic Usage",
+      "description": "SFX, music with a parameter, volume sliders bound to buses, a custom settings store and per-scene bank loading.",
+      "path": "Samples~/BasicUsage"
+    },
+    {
+      "displayName": "Minimal Studio Project",
+      "description": "Step-by-step instructions for building the minimal FMOD Studio project the samples and the wizard smoke test use.",
+      "path": "Samples~/MinimalStudioProject"
+    }
+  ]
+}
