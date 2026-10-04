@@ -15,22 +15,31 @@ namespace kinatraa.fmodaudio.Editor
         private readonly HashSet<SetupCheck> expanded = new HashSet<SetupCheck>();
         private Vector2 scroll;
         private bool fmodInstalled;
-        private GUIStyle wrap;
+        private bool onlyProblems;
 
         /// <summary>Opens the wizard.</summary>
-        [MenuItem("Tools/kinatraa/FMOD Audio/Setup Wizard", priority = 0)]
+        [MenuItem(EditorUi.MenuRoot + "Setup Wizard", priority = 0)]
         public static void Open()
         {
             SoundSetupWizardWindow window = GetWindow<SoundSetupWizardWindow>();
-            window.titleContent = new GUIContent("FMOD Audio Setup");
-            window.minSize = new Vector2(520, 420);
+            window.titleContent = new GUIContent(EditorUi.WizardTitle);
+            window.minSize = new Vector2(540, 420);
             window.Refresh();
             window.Show();
         }
 
-        private void OnEnable() => Refresh();
+        private void OnEnable()
+        {
+            titleContent = new GUIContent(EditorUi.WizardTitle);
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+            Refresh();
+        }
+
+        private void OnDisable() => EditorApplication.playModeStateChanged -= OnPlayModeChanged;
 
         private void OnFocus() => Refresh();
+
+        private void OnPlayModeChanged(PlayModeStateChange change) => Refresh();
 
         /// <summary>Re-evaluates every check.</summary>
         public void Refresh()
@@ -40,40 +49,41 @@ namespace kinatraa.fmodaudio.Editor
             foreach (SetupCheck check in SetupCheckRegistry.All)
             {
                 if (!fmodInstalled && !(check is FmodInstalledCheck) && !(check is ScriptingDefineCheck)) continue;
-                SetupCheckResult result;
-                try
-                {
-                    result = check.Evaluate();
-                }
-                catch (Exception e)
-                {
-                    result = SetupCheckResult.Warn("Check failed to run: " + e.Message);
-                }
-                rows.Add((check, result));
+                rows.Add((check, Evaluate(check)));
             }
             Repaint();
         }
 
+        private static SetupCheckResult Evaluate(SetupCheck check)
+        {
+            try
+            {
+                return check.Evaluate();
+            }
+            catch (Exception e)
+            {
+                return SetupCheckResult.Warn("Check failed to run: " + e.Message);
+            }
+        }
+
+        private int FixableCount()
+        {
+            int n = 0;
+            foreach ((SetupCheck check, SetupCheckResult result) in rows)
+            {
+                if (check.IncludedInFixAll && result.Status != SetupStatus.OK && check.CanFix(result)) n++;
+            }
+            return n;
+        }
+
         private void OnGUI()
         {
-            if (wrap == null) wrap = new GUIStyle(EditorStyles.label) { wordWrap = true, richText = false };
+            EditorUi.Header("kinatraa FMOD Audio: project setup",
+                "Each item shows its status, why it matters, and a Fix button when it can be fixed automatically. " +
+                "Fixes are idempotent and logged to the Console; scene and settings changes support Undo.");
 
-            EditorGUILayout.LabelField("kinatraa FMOD Audio: project setup", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Each item shows its status, why it matters, and a Fix button when it can be fixed automatically. " +
-                                       "Fixes are idempotent and logged to the Console; scene and settings changes support Undo.", wrap);
-            EditorGUILayout.Space();
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("Re-scan", GUILayout.Width(90))) Refresh();
-                using (new EditorGUI.DisabledScope(!fmodInstalled))
-                {
-                    if (GUILayout.Button("Fix All", GUILayout.Width(90))) FixAll();
-                }
-                GUILayout.FlexibleSpace();
-                if (GUILayout.Button("Validate (log report)", GUILayout.Width(150))) SetupValidator.Run();
-            }
-            EditorGUILayout.Space();
+            DrawToolbar();
+            DrawSummary();
 
             if (!fmodInstalled)
             {
@@ -88,8 +98,62 @@ namespace kinatraa.fmodaudio.Editor
             }
 
             scroll = EditorGUILayout.BeginScrollView(scroll);
-            foreach ((SetupCheck check, SetupCheckResult result) in rows) DrawRow(check, result);
+            foreach ((SetupCheck check, SetupCheckResult result) in rows)
+            {
+                if (onlyProblems && (result.Status == SetupStatus.OK || result.Status == SetupStatus.Info)) continue;
+                DrawRow(check, result);
+            }
             EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawToolbar()
+        {
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                if (GUILayout.Button("Re-scan", EditorStyles.toolbarButton, GUILayout.Width(64))) Refresh();
+                int fixable = FixableCount();
+                using (new EditorGUI.DisabledScope(!fmodInstalled || fixable == 0))
+                {
+                    if (GUILayout.Button(fixable > 0 ? $"Fix All ({fixable})" : "Fix All", EditorStyles.toolbarButton, GUILayout.Width(80))) FixAll();
+                }
+                onlyProblems = GUILayout.Toggle(onlyProblems, "Only problems", EditorStyles.toolbarButton, GUILayout.Width(96));
+                GUILayout.FlexibleSpace();
+                using (new EditorGUI.DisabledScope(!SetupCheckRegistry.FmodChecksRegistered))
+                {
+                    if (GUILayout.Button(EditorUi.CueLibraryTitle, EditorStyles.toolbarButton)) EditorApplication.ExecuteMenuItem(EditorUi.MenuRoot + "Cue Library");
+                    if (GUILayout.Button(EditorUi.DebuggerTitle, EditorStyles.toolbarButton)) EditorApplication.ExecuteMenuItem(EditorUi.MenuRoot + "Runtime Debugger");
+                }
+                if (GUILayout.Button("Log report", EditorStyles.toolbarButton)) SetupValidator.Run();
+                if (GUILayout.Button("Docs", EditorStyles.toolbarButton)) EditorUi.OpenDocs("Wizard.md");
+            }
+        }
+
+        private void DrawSummary()
+        {
+            int ok = 0, info = 0, warn = 0, missing = 0;
+            foreach ((SetupCheck _, SetupCheckResult result) in rows)
+            {
+                switch (result.Status)
+                {
+                    case SetupStatus.OK: ok++; break;
+                    case SetupStatus.Info: info++; break;
+                    case SetupStatus.Warning: warn++; break;
+                    default: missing++; break;
+                }
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorUi.ColoredLabel($"{ok} OK", EditorUi.OkColor, EditorStyles.boldLabel, GUILayout.Width(60));
+                EditorUi.ColoredLabel($"{warn} warning(s)", EditorUi.WarningColor, EditorStyles.boldLabel, GUILayout.Width(100));
+                EditorUi.ColoredLabel($"{missing} missing", EditorUi.ErrorColor, EditorStyles.boldLabel, GUILayout.Width(80));
+                if (info > 0) EditorUi.ColoredLabel($"{info} info", EditorUi.InfoColor, EditorStyles.boldLabel, GUILayout.Width(60));
+                GUILayout.FlexibleSpace();
+                if (fmodInstalled && SetupCheckRegistry.FmodChecksRegistered && missing == 0 && warn == 0)
+                {
+                    EditorUi.ColoredLabel("Project is set up.", EditorUi.OkColor, EditorStyles.boldLabel);
+                }
+            }
+            EditorGUILayout.Space(2);
         }
 
         private void DrawRow(SetupCheck check, SetupCheckResult result)
@@ -98,19 +162,17 @@ namespace kinatraa.fmodaudio.Editor
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    Color old = GUI.color;
-                    GUI.color = StatusColor(result.Status);
-                    GUILayout.Label(StatusLabel(result.Status), EditorStyles.boldLabel, GUILayout.Width(70));
-                    GUI.color = old;
+                    EditorUi.ColoredLabel(EditorUi.StatusLabel(result.Status), EditorUi.StatusColor(result.Status), EditorStyles.boldLabel, GUILayout.Width(64));
                     GUILayout.Label($"{check.Order / 10}. {check.Title}", EditorStyles.boldLabel);
                     GUILayout.FlexibleSpace();
-                    if (check.CanFix(result) && GUILayout.Button(check.FixLabel, GUILayout.MinWidth(90)))
+                    if (check.CanFix(result) && GUILayout.Button(new GUIContent(check.FixLabel, check.IncludedInFixAll ? "Fix this item" : "Fix this item (not part of Fix All)"), GUILayout.MinWidth(90)))
                     {
                         RunFix(check);
                         GUIUtility.ExitGUI();
                     }
                 }
-                EditorGUILayout.LabelField(result.Message, wrap);
+                EditorGUILayout.LabelField(result.Message, EditorUi.Wrap);
+                if (!check.HasDetails) return;
                 bool open = expanded.Contains(check);
                 bool now = EditorGUILayout.Foldout(open, "Details", true);
                 if (now != open)
@@ -163,28 +225,6 @@ namespace kinatraa.fmodaudio.Editor
             }
             Debug.Log($"[kinatraa.fmodaudio] Setup: Fix All applied {applied} fix(es).");
             return applied;
-        }
-
-        private static string StatusLabel(SetupStatus status)
-        {
-            switch (status)
-            {
-                case SetupStatus.OK: return "OK";
-                case SetupStatus.Info: return "Info";
-                case SetupStatus.Warning: return "Warning";
-                default: return "Missing";
-            }
-        }
-
-        private static Color StatusColor(SetupStatus status)
-        {
-            switch (status)
-            {
-                case SetupStatus.OK: return new Color(0.45f, 0.85f, 0.45f);
-                case SetupStatus.Info: return new Color(0.6f, 0.75f, 1f);
-                case SetupStatus.Warning: return new Color(1f, 0.8f, 0.3f);
-                default: return new Color(1f, 0.45f, 0.45f);
-            }
         }
     }
 

@@ -3,10 +3,12 @@
 A small, safe wrapper and tooling layer on top of **FMOD for Unity**, packaged as a UPM package.
 
 - `Sound.Play("ui_click")`: cue ids instead of event paths, GUID-based event references, recycle-safe handles.
-- A single music slot, bus volumes and mutes, snapshots, pause, global parameters, ref-counted bank loading (sync and async), per-scene banks.
+- A single music slot, bus and VCA volumes and mutes, snapshots, pause, global parameters, ref-counted bank loading (sync and async), per-scene banks.
+- Handles you can move, attach, seek (`TimelinePosition`) and read parameters from; stale handles are safe no-ops.
 - Your game owns its settings: plug any save system in through `ISoundSettingsStore` (PlayerPrefs by default).
 - A **Setup Wizard** that checks and configures a Unity project for FMOD with a fixed convention: Fix / Fix All, idempotent, logged, Undo where possible, plus a CI validator.
-- Editor tools: Cue Library window (search, filters, bulk edit, drag & drop FMOD events, preview), `[SoundCueId]` dropdown, `SoundIds.cs` generator, Play Mode runtime debugger.
+- Editor tools: Cue Library window (search, filters, bulk edit, drag & drop FMOD events, preview, validation), `[SoundCueId]` dropdown, `SoundIds.cs` generator (optionally automatic), Play Mode runtime debugger.
+- Game code can't break audio: exceptions from your hooks and event handlers are logged, never thrown back into `Sound` calls.
 
 It does not ship FMOD and has no other dependencies. Without FMOD installed the package compiles cleanly and only the wizard (explaining what is missing) is active.
 
@@ -16,8 +18,9 @@ It does not ship FMOD and has no other dependencies. Without FMOD installed the 
 |---|---|---|
 | FMOD for Unity | **2.03.15** | Tested (runtime tests, wizard, player build) |
 | FMOD Studio (bank authoring) | **2.03.15** | Tested. Banks must be built with FMOD Studio from the same 2.03 line as FMOD for Unity |
-| Unity | 6000.3.13f1 (macOS) | Tested: compile matrix (without FMOD, FMOD added later, FMOD removed, FMOD re-imported, next to another kinatraa audio package), wizard end to end, 21 Play Mode tests + 1 Edit Mode test (domain reload disabled), macOS Mono player build |
-| Unity | 6000.3.6f1 (macOS) | Tested: fresh project + FMOD + package compiles without errors or warnings, define added automatically |
+| Unity | 6000.3.13f1 (macOS) | Tested with 1.0.0: compile matrix (without FMOD, FMOD added later, FMOD removed, FMOD re-imported, next to another kinatraa audio package), wizard end to end, 21 Play Mode tests + 1 Edit Mode test (domain reload disabled), macOS Mono player build |
+| Unity | 6000.3.6f1 (macOS) | Tested with 1.0.0: fresh project + FMOD + package compiles without errors or warnings, define added automatically |
+| Unity | 6000.3.13f1 (Windows) | Used for development. The 1.1.0 changes were compile-checked against the Unity 6000.3 / FMOD 2.03.15 APIs and their Edit Mode logic tests pass; re-run the Play Mode suite ([Tests](#tests)) to confirm on your machine |
 | Unity | 2021.3 LTS | Declared minimum (APIs chosen for it) but **not tested** |
 | FMOD for Unity 2.02 / 1.x | | **Not supported** |
 
@@ -29,7 +32,7 @@ download *FMOD for Unity 2.03.15* from [fmod.com/download](https://www.fmod.com/
 UPM git URL (Package Manager > + > Add package from git URL):
 
 ```
-https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.0.0
+https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.1.0
 ```
 
 Or as a git submodule (embedded package):
@@ -54,6 +57,8 @@ Sound.Play("explosion", hitPoint);                        // 3D at a position
 SoundHandle engine = Sound.Play("engine_loop", transform);// attached, follows the transform
 engine.SetParameter("RPM", 0.7f);
 engine.Stop(allowFadeOut: true);
+SoundHandle shot = Sound.Play("whoosh", start);            // 3D at a position...
+shot.SetPosition(projectile.position);                    // ...that you move yourself (or shot.AttachTo(t))
 Sound.PlayMusic("battle_theme");                          // single music slot, replaces with FMOD fade-out
 Sound.SetBusVolume(SoundChannel.Music, 0.5f);             // linear 0..1, persisted
 SnapshotHandle pause = Sound.PushSnapshot("Pause");       // ... later: pause.Release();
@@ -64,9 +69,9 @@ SnapshotHandle pause = Sound.PushSnapshot("Pause");       // ... later: pause.Re
 | Area | Calls |
 |---|---|
 | Play | `Sound.Play(id)`, `Play(id, Vector3)`, `Play(id, Transform)`, `Play(EventReference[, Vector3/Transform])` |
-| Handle | `IsValid`, `IsPlaying`, `IsPaused`, `State`, `CueId`, `Stop(allowFadeOut)`, `Pause()`, `Resume()`, `SetParameter(name/id, v)`, `GetParameterId`, `SetVolume`, `SetPitch` |
+| Handle | `IsValid`, `IsPlaying`, `IsPaused`, `State`, `CueId`, `Stop(allowFadeOut)`, `Pause()`, `Resume()`, `SetParameter(name/id, v)`, `TryGetParameter`, `GetParameterId`, `SetVolume`, `SetPitch`, `SetPosition`, `AttachTo`, `TimelinePosition` |
 | Music | `PlayMusic(id)`, `StopMusic()`, `PauseMusic()`, `ResumeMusic()`, `SetMusicParameter(name, v)`, `CurrentMusic` |
-| Mix | `SetBusVolume / GetBusVolume`, `SetBusMuted / IsBusMuted`, `ApplyVolumes`, `GetAllVolumes`, `StopChannel`, `StopAll` |
+| Mix | `SetBusVolume / GetBusVolume`, `SetBusMuted / IsBusMuted` (bus or VCA channels), `ApplyVolumes`, `GetAllVolumes`, `ResetVolumes`, `SaveSettings`, `StopChannel`, `StopAll` |
 | State | `SetGlobalParameter / GetGlobalParameter`, `PushSnapshot(key) -> SnapshotHandle.Release()`, `PauseAll()`, `ResumeAll()` |
 | Banks | `LoadBank`, `LoadBankAsync(name, ok => ...)`, `UnloadBank`, `IsBankLoaded`, per-scene banks via config or `ISoundBankProvider` |
 | Hooks | `SetSettingsStore`, `BindSettings(load, save)`, `SetPolicy(ISoundPolicy)`, `SetBankProvider` |
@@ -79,7 +84,7 @@ Full reference: [Documentation~/API.md](Documentation~/API.md). Everything is ma
 
 | Kind | Convention |
 |---|---|
-| Buses | `bus:/Music`, `bus:/SFX`, `bus:/UI`, `bus:/Voice`, `bus:/Ambient` (group buses under the Master Bus) |
+| Buses | `bus:/Music`, `bus:/SFX`, `bus:/UI`, `bus:/Voice`, `bus:/Ambient` (group buses under the Master Bus); a channel can point at a VCA (`vca:/Music`) instead |
 | Events | `event:/Music/...`, `event:/SFX/...`, `event:/UI/...`, `event:/Ambient/...`, `event:/Voice/...` |
 | Snapshots | `snapshot:/Pause`, `snapshot:/Ducking` |
 | Banks | `Master`, `Master.strings`, `Common`, `Music`, one bank per level/area |
@@ -107,6 +112,18 @@ Unity audio disabled, listener, banks built and fresh, config asset, folders, `.
 CI: `Unity -batchmode -quit -projectPath . -executeMethod kinatraa.fmodaudio.Editor.SetupValidator.RunAndExit`.
 See [Documentation~/Wizard.md](Documentation~/Wizard.md).
 
+## Tests
+
+The package ships its tests. Add it to `testables` in `Packages/manifest.json`, then use **Window > General > Test Runner**:
+
+```json
+"testables": [ "com.kinatraa.fmodaudio" ]
+```
+
+- **Edit Mode** (`Tests/Editor`): editor tooling logic and runtime safety; no banks needed.
+- **Play Mode** (`Tests/Runtime`): music events, handle positioning/timeline, volumes, bank callbacks, `SoundBankLoader`, and
+  exception safety. They need the banks and cues of the *Minimal Studio Project* sample and are skipped otherwise.
+
 ## Documentation
 
 [Getting started](Documentation~/GettingStarted.md) · [Conventions](Documentation~/Conventions.md) · [Settings integration](Documentation~/SettingsIntegration.md) ·
@@ -119,7 +136,6 @@ under their own license; **no FMOD files are included in this repository**, and 
 
 ## Roadmap
 
-- Test on Unity 2021.3 / 2022.3 LTS and Windows; WebGL and Android OBB (asynchronous bank loading) on device.
+- Test on Unity 2021.3 / 2022.3 LTS; WebGL and Android OBB (asynchronous bank loading) on device.
 - Optional Addressables bank loading through FMOD's `AssetReference` API.
 - Programmer sounds / localized dialogue helpers for the Voice channel.
-- VCA support alongside buses.

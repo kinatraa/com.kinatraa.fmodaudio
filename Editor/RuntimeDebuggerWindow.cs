@@ -19,17 +19,23 @@ namespace kinatraa.fmodaudio.Editor
         private readonly List<FmodBackend.GlobalParameterInfo> globals = new List<FmodBackend.GlobalParameterInfo>();
         private readonly List<string> cueIds = new List<string>();
         private readonly HashSet<SoundHandle> expanded = new HashSet<SoundHandle>();
+        private readonly List<SnapshotHandle> pushedSnapshots = new List<SnapshotHandle>();
         private Vector2 scroll;
         private string playCue = string.Empty;
+        private string filter = string.Empty;
+        private int snapshotKey;
 
         /// <summary>Opens the window.</summary>
-        [MenuItem("Tools/kinatraa/FMOD Audio/Runtime Debugger", priority = 21)]
+        [MenuItem(EditorUi.MenuRoot + "Runtime Debugger", priority = 21)]
         public static void Open()
         {
             RuntimeDebuggerWindow w = GetWindow<RuntimeDebuggerWindow>();
-            w.titleContent = new GUIContent("Sound Debugger");
+            w.titleContent = new GUIContent(EditorUi.DebuggerTitle);
+            w.minSize = new Vector2(520, 300);
             w.Show();
         }
+
+        private void OnEnable() => titleContent = new GUIContent(EditorUi.DebuggerTitle);
 
         private void OnInspectorUpdate()
         {
@@ -40,6 +46,8 @@ namespace kinatraa.fmodaudio.Editor
         {
             if (!EditorApplication.isPlaying)
             {
+                pushedSnapshots.Clear();
+                EditorUi.Header("Runtime Debugger", "Live view of the sound system: sounds, music, buses, parameters, snapshots and banks.");
                 EditorGUILayout.HelpBox("Enter Play Mode to inspect the sound system.", MessageType.Info);
                 return;
             }
@@ -49,26 +57,28 @@ namespace kinatraa.fmodaudio.Editor
                 return;
             }
 
-            scroll = EditorGUILayout.BeginScrollView(scroll);
-            EditorGUILayout.LabelField($"FMOD {Sound.FmodVersion} | ready: {Sound.IsReady} | paused: {Sound.IsPaused} | tracked: {Sound.ActiveSoundCount} (queued {Sound.QueuedSoundCount})",
-                EditorStyles.boldLabel);
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                if (GUILayout.Button(Sound.IsPaused ? "Resume all" : "Pause all", GUILayout.Width(90)))
+                if (GUILayout.Button(Sound.IsPaused ? "Resume all" : "Pause all", EditorStyles.toolbarButton, GUILayout.Width(80)))
                 {
                     if (Sound.IsPaused) Sound.ResumeAll();
                     else Sound.PauseAll();
                 }
-                if (GUILayout.Button("Stop all", GUILayout.Width(70))) Sound.StopAll();
+                if (GUILayout.Button("Stop all", EditorStyles.toolbarButton, GUILayout.Width(60))) Sound.StopAll();
+                GUILayout.FlexibleSpace();
                 Sound.DebugGetCueIds(cueIds);
                 if (cueIds.Count > 0)
                 {
                     int i = Mathf.Max(0, cueIds.IndexOf(playCue));
-                    i = EditorGUILayout.Popup(i, cueIds.ToArray(), GUILayout.Width(160));
+                    i = EditorGUILayout.Popup(i, cueIds.ToArray(), EditorStyles.toolbarPopup, GUILayout.Width(160));
                     playCue = cueIds[i];
-                    if (GUILayout.Button("Play", GUILayout.Width(50))) Sound.Play(playCue);
+                    if (GUILayout.Button("Play cue", EditorStyles.toolbarButton, GUILayout.Width(60))) Sound.Play(playCue);
                 }
             }
+
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+            EditorGUILayout.LabelField($"FMOD {Sound.FmodVersion}   ready: {Sound.IsReady}   paused: {Sound.IsPaused}   tracked: {Sound.ActiveSoundCount} (queued {Sound.QueuedSoundCount})",
+                EditorStyles.miniBoldLabel);
 
             Section("Music");
             string music = Sound.CurrentMusic;
@@ -85,9 +95,17 @@ namespace kinatraa.fmodaudio.Editor
 
             Section("Active sounds");
             Sound.DebugGetSounds(sounds);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                filter = EditorGUILayout.TextField(filter, EditorStyles.toolbarSearchField);
+                GUILayout.Label($"{sounds.Count} sound(s)", EditorStyles.miniLabel, GUILayout.Width(80));
+            }
             if (sounds.Count == 0) EditorGUILayout.LabelField("(none)");
             foreach (Sound.DebugSound s in sounds)
             {
+                if (filter.Length > 0 && (s.CueId ?? string.Empty).IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    (s.EventPath ?? string.Empty).IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    s.Channel.Name.IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool open = expanded.Contains(s.Handle);
@@ -119,17 +137,25 @@ namespace kinatraa.fmodaudio.Editor
                 EditorGUI.indentLevel--;
             }
 
-            Section("Buses");
+            Section("Channels (buses / VCAs)");
             Sound.GetChannels(channels);
             foreach (SoundChannel c in channels)
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    float v = EditorGUILayout.Slider(c.Name, Sound.GetBusVolume(c), 0f, 1f);
+                    string path = Sound.DebugGetChannelPath(c) ?? string.Empty;
+                    float v = EditorGUILayout.Slider(new GUIContent(c.Name, path), Sound.GetBusVolume(c), 0f, 1f);
                     if (!Mathf.Approximately(v, Sound.GetBusVolume(c))) Sound.SetBusVolume(c, v);
                     bool muted = GUILayout.Toggle(Sound.IsBusMuted(c), "mute", GUILayout.Width(50));
                     if (muted != Sound.IsBusMuted(c)) Sound.SetBusMuted(c, muted);
+                    if (GUILayout.Button(new GUIContent("Stop", "Sound.StopChannel"), EditorStyles.miniButton, GUILayout.Width(40))) Sound.StopChannel(c);
                 }
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(new GUIContent("Reset volumes", "Sound.ResetVolumes(): configured defaults, unmuted, saved"), EditorStyles.miniButton, GUILayout.Width(100))) Sound.ResetVolumes();
+                if (GUILayout.Button(new GUIContent("Save settings", "Sound.SaveSettings(): flush the settings store to disk"), EditorStyles.miniButton, GUILayout.Width(100))) Sound.SaveSettings();
             }
 
             Section("Global parameters");
@@ -143,7 +169,31 @@ namespace kinatraa.fmodaudio.Editor
 
             Section("Snapshots");
             Sound.DebugGetSnapshots(snapshots);
-            EditorGUILayout.LabelField(snapshots.Count == 0 ? "(none)" : string.Join(", ", snapshots));
+            EditorGUILayout.LabelField("Active: " + (snapshots.Count == 0 ? "(none)" : string.Join(", ", snapshots)), EditorStyles.wordWrappedMiniLabel);
+            if (Sound.Config != null && Sound.Config.Snapshots.Count > 0)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    string[] keys = new string[Sound.Config.Snapshots.Count];
+                    for (int k = 0; k < keys.Length; k++) keys[k] = Sound.Config.Snapshots[k]?.Key ?? "(empty)";
+                    snapshotKey = Mathf.Clamp(snapshotKey, 0, keys.Length - 1);
+                    snapshotKey = EditorGUILayout.Popup(snapshotKey, keys, GUILayout.Width(140));
+                    if (GUILayout.Button("Push", EditorStyles.miniButton, GUILayout.Width(50)))
+                    {
+                        SnapshotHandle h = Sound.PushSnapshot(keys[snapshotKey]);
+                        if (h.IsValid) pushedSnapshots.Add(h);
+                    }
+                    pushedSnapshots.RemoveAll(h => !h.IsValid);
+                    using (new EditorGUI.DisabledScope(pushedSnapshots.Count == 0))
+                    {
+                        if (GUILayout.Button($"Release pushed ({pushedSnapshots.Count})", EditorStyles.miniButton, GUILayout.Width(130)))
+                        {
+                            foreach (SnapshotHandle h in pushedSnapshots) h.Release();
+                            pushedSnapshots.Clear();
+                        }
+                    }
+                }
+            }
 
             Section("Banks");
             Sound.DebugGetBankRefs(bankRefs);

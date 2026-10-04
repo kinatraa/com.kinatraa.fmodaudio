@@ -84,6 +84,8 @@ namespace kinatraa.fmodaudio.Editor
             LogChange($"FMOD settings: Source = FMOD Studio project, path = {settings.SourceProjectPath}, bank folder = {settings.SourceBankPath}.");
         }
 
+        public override bool HasDetails => true;
+
         public override void DrawGUI()
         {
             List<string> found = FmodProject.FindStudioProjects();
@@ -110,13 +112,18 @@ namespace kinatraa.fmodaudio.Editor
         public override int Order => 40;
         public override string Title => "Studio project conventions (buses, snapshots)";
 
-        internal static List<string> RequiredBuses(SoundSystemConfig config)
+        /// <summary>Mixer paths the config's channels point at (buses and VCAs), excluding the master bus.</summary>
+        internal static List<string> RequiredMixerPaths(SoundSystemConfig config)
         {
             List<SoundChannelDefinition> defs = config != null ? config.Channels : SoundSystemConfig.CreateDefaultChannels();
             return defs.Where(d => d != null && !string.IsNullOrEmpty(d.Name))
                 .Select(d => string.IsNullOrEmpty(d.BusPath) ? "bus:/" + d.Name : d.BusPath)
                 .Where(p => p != "bus:/").Distinct().ToList();
         }
+
+        internal static List<string> RequiredBuses(SoundSystemConfig config) => RequiredMixerPaths(config).Where(p => !p.StartsWith("vca:/", StringComparison.Ordinal)).ToList();
+
+        internal static List<string> RequiredVcas(SoundSystemConfig config) => RequiredMixerPaths(config).Where(p => p.StartsWith("vca:/", StringComparison.Ordinal)).ToList();
 
         internal static List<string> OptionalSnapshots(SoundSystemConfig config)
         {
@@ -133,6 +140,7 @@ namespace kinatraa.fmodaudio.Editor
 
             SoundSystemConfig config = EditorCues.FindResourcesConfig();
             List<string> missingBuses = RequiredBuses(config).Where(b => !info.BusPaths.Contains(b)).ToList();
+            List<string> missingVcas = RequiredVcas(config).Where(v => !info.VcaPaths.Contains(v)).ToList();
             List<string> missingSnapshots = OptionalSnapshots(config)
                 .Where(s => !info.SnapshotPaths.Contains(s) && !info.SnapshotNames.Contains(s.Substring(s.LastIndexOf('/') + 1))).ToList();
 
@@ -146,15 +154,27 @@ namespace kinatraa.fmodaudio.Editor
                 sb.Append($"Missing bus '{bus}': in FMOD Studio open Window > Mixer, right-click 'Master Bus' > New Group, name it '{bus.Substring(5)}', " +
                           "route the matching events to it (event's master track output), then File > Save and File > Build. ");
             }
+            foreach (string vca in missingVcas)
+            {
+                sb.Append($"Missing VCA '{vca}': in FMOD Studio open Window > Mixer, right-click in the VCAs area > New VCA, name it " +
+                          $"'{vca.Substring(5)}', assign the buses it should control (right-click a bus > Assign to VCA), then save and build. ");
+            }
             foreach (string snap in missingSnapshots)
             {
                 sb.Append($"Optional snapshot '{snap}' not found: in the Mixer's Snapshots tab right-click > New Overriding Snapshot, name it " +
                           $"'{snap.Substring(snap.LastIndexOf('/') + 1)}', assign it to the Master bank, then save and build. ");
             }
-            if (sb.Length == 0) return SetupCheckResult.Ok($"Studio {info.SerializationModel}; all {RequiredBuses(config).Count} buses and {OptionalSnapshots(config).Count} snapshots found.");
-            sb.Append("The bus list comes from the config's channels (editable under Details).");
-            return missingBuses.Count > 0 ? SetupCheckResult.Missing(sb.ToString()) : SetupCheckResult.Warn(sb.ToString());
+            if (sb.Length == 0)
+            {
+                int vcas = RequiredVcas(config).Count;
+                return SetupCheckResult.Ok($"Studio {info.SerializationModel}; all {RequiredBuses(config).Count} buses" +
+                                           (vcas > 0 ? $", {vcas} VCA(s)" : string.Empty) + $" and {OptionalSnapshots(config).Count} snapshots found.");
+            }
+            sb.Append("The bus/VCA list comes from the config's channels (editable under Details).");
+            return missingBuses.Count > 0 || missingVcas.Count > 0 ? SetupCheckResult.Missing(sb.ToString()) : SetupCheckResult.Warn(sb.ToString());
         }
+
+        public override bool HasDetails => true;
 
         public override void DrawGUI()
         {
@@ -244,7 +264,7 @@ namespace kinatraa.fmodaudio.Editor
             }
 #if kinatraa_fmodaudio_unity_audio
             if (!RemoveAudioListener) return;
-            foreach (AudioListener listener in InOpenScenes<AudioListener>())
+            foreach (AudioListener listener in InOpenScenes<AudioListener>().Where(l => l.enabled))
             {
                 Scene scene = listener.gameObject.scene;
                 string owner = listener.name;
@@ -254,6 +274,8 @@ namespace kinatraa.fmodaudio.Editor
             }
 #endif
         }
+
+        public override bool HasDetails => true;
 
         public override void DrawGUI()
         {
@@ -367,11 +389,19 @@ namespace kinatraa.fmodaudio.Editor
             if (config == null) return SetupCheckResult.Missing($"No {SoundSystemConfig.ResourcesName} in a Resources folder. The runtime falls back to defaults and warns. Fix creates {EditorCues.ConfigAssetPath}.");
             var issues = new List<string>();
             if (config.Channels.Count == 0) issues.Add("no channels defined");
+            List<string> badPaths = config.Channels
+                .Where(c => c != null && !string.IsNullOrEmpty(c.BusPath) && !c.BusPath.StartsWith("bus:/", StringComparison.Ordinal) && !c.BusPath.StartsWith("vca:/", StringComparison.Ordinal))
+                .Select(c => c.Name).ToList();
+            if (badPaths.Count > 0) issues.Add($"channel path must start with bus:/ or vca:/ ({string.Join(", ", badPaths)})");
             if (config.Libraries.Count == 0 || config.Libraries.Any(l => l == null)) issues.Add("no (or empty) cue library entries");
             if (!config.Banks.Contains("Master") || !config.Banks.Contains("Master.strings")) issues.Add("always-loaded banks do not include Master and Master.strings");
             string where = AssetDatabase.GetAssetPath(config);
-            return issues.Count == 0 ? SetupCheckResult.Ok($"{where}: {config.Channels.Count} channels, {config.Libraries.Count} library(ies).")
-                : SetupCheckResult.Warn($"{where}: {string.Join("; ", issues)}.");
+            if (issues.Count > 0) return SetupCheckResult.Warn($"{where}: {string.Join("; ", issues)}.");
+            int unregistered = EditorCues.FindAllLibraries().Count(l => !config.Libraries.Contains(l));
+            string note = unregistered > 0
+                ? $" {unregistered} other cue library(ies) in the project are not in Libraries; register them at runtime with Sound.RegisterLibrary or add them to the config."
+                : string.Empty;
+            return SetupCheckResult.Ok($"{where}: {config.Channels.Count} channels, {config.Libraries.Count} library(ies).{note}");
         }
 
         public override bool CanFix(SetupCheckResult result) => result.Status == SetupStatus.Missing;
@@ -483,6 +513,8 @@ namespace kinatraa.fmodaudio.Editor
             else report = $"FAILED: event {cue.Event.Path} not found at runtime. Is its bank loaded (config Banks / scene banks)?";
             return false;
         }
+
+        public override bool HasDetails => true;
 
         public override void DrawGUI()
         {

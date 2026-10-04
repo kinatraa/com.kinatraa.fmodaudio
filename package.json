@@ -1,8 +1,8 @@
 {
   "name": "com.kinatraa.fmodaudio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "kinatraa FMOD Audio",
-  "description": "A safe, simple wrapper and tooling layer on top of FMOD for Unity: cue libraries, recycle-safe handles, music slot, bus volumes, snapshots, bank loading, pluggable settings/save hooks, a setup wizard that configures a project for FMOD, and editor tools (cue library window, id picker, constants generator, runtime debugger). Requires FMOD for Unity 2.03 (installed separately).",
+  "description": "A safe, simple wrapper and tooling layer on top of FMOD for Unity: cue libraries, recycle-safe handles, music slot, bus and VCA volumes, snapshots, bank loading, pluggable settings/save hooks, a setup wizard that configures a project for FMOD, and editor tools (cue library window, id picker, constants generator, runtime debugger). Requires FMOD for Unity 2.03 (installed separately).",
   "unity": "2021.3",
   "author": {
     "name": "kinatraa",

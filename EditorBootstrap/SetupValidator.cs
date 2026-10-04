@@ -96,7 +96,7 @@ namespace kinatraa.fmodaudio.Editor
             EditorApplication.Exit(result.ExitCode);
         }
 
-        [MenuItem("Tools/kinatraa/FMOD Audio/Validate Setup", priority = 1)]
+        [MenuItem(EditorUi.MenuRoot + "Validate Setup", priority = 1)]
         private static void ValidateMenu()
         {
             Result result = Run();

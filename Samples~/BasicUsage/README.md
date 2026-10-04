@@ -4,9 +4,9 @@ Scripts showing the kinatraa FMOD Audio API. They use IMGUI so they need no UI o
 
 | Script | Shows |
 |---|---|
-| `SfxExample` | 2D, 3D-at-position and transform-attached SFX; a looping handle with `SetParameter`, pause/resume, stop with fade-out |
+| `SfxExample` | 2D, 3D-at-position and transform-attached SFX, moving a playing sound with `SetPosition`; a looping handle with `SetParameter`, pause/resume, stop with fade-out |
 | `MusicExample` | `PlayMusic` / `StopMusic`, a music parameter, `PauseAll` / `ResumeAll`, pushing and releasing a snapshot |
-| `VolumeSliders` | Sliders and mute toggles bound to every configured channel (bus), persisted through the settings store |
+| `VolumeSliders` | Sliders and mute toggles bound to every configured channel (bus or VCA), persisted through the settings store; *Reset to defaults* (`ResetVolumes`) and *Save* (`SaveSettings`) |
 | `JsonFileSettingsStore` + `JsonFileSettingsInstaller` | A custom `ISoundSettingsStore` saving to a JSON file |
 | `SceneBankExample` | `LoadBankAsync` with a callback and a custom `ISoundBankProvider` (scene name -> bank) |
 

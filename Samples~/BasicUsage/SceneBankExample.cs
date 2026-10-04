@@ -24,28 +24,39 @@ namespace kinatraa.fmodaudio.Samples
         public bool UseLevelNameProvider;
 
         private SoundHandle ambience;
+        private bool holdingBank;   // true while this script owns one reference to the bank
+        private bool loading;
 
         private void Awake()
         {
             if (UseLevelNameProvider) Sound.SetBankProvider(new LevelNameBankProvider());
         }
 
+        private void OnDestroy()
+        {
+            if (holdingBank) Sound.UnloadBank(Bank);
+        }
+
         private void OnGUI()
         {
             GUILayout.BeginArea(new Rect(10, 420, 260, 160), GUI.skin.box);
-            GUILayout.Label($"Bank '{Bank}' loaded: {Sound.IsBankLoaded(Bank)}");
-            if (GUILayout.Button("LoadBankAsync + play"))
+            GUILayout.Label($"Bank '{Bank}' loaded: {Sound.IsBankLoaded(Bank)}" + (loading ? " (loading...)" : string.Empty));
+            if (!holdingBank && !loading && GUILayout.Button("LoadBankAsync + play"))
             {
+                loading = true;
                 Sound.LoadBankAsync(Bank, ok =>
                 {
+                    loading = false;
+                    holdingBank = ok;
                     Debug.Log($"Bank {Bank} loaded: {ok}");
                     if (ok) ambience = Sound.Play(CueInBank);
                 }, loadSampleData: true);
             }
-            if (GUILayout.Button("Stop + UnloadBank"))
+            if (holdingBank && GUILayout.Button("Stop + UnloadBank"))
             {
                 ambience.Stop();
                 Sound.UnloadBank(Bank);
+                holdingBank = false;
             }
             GUILayout.EndArea();
         }

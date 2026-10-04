@@ -13,6 +13,13 @@ namespace kinatraa.fmodaudio
         private const float MaxQueueSeconds = 10f;
         private const float SweepInterval = 0.1f;
 
+        /// <summary>
+        /// How long an asynchronous bank load (WebGL, Android OBB, LoadBankAsync) may stay pending before it is treated as
+        /// failed. FMOD for Unity 2.03.15 never clears its "loading" counter after a failed asynchronous load, so without a
+        /// deadline a single bad bank would block every queued play forever.
+        /// </summary>
+        internal const float BankLoadTimeout = 30f;
+
         private enum SlotState : byte { Free, Queued, Active }
 
         private enum SpaceMode : byte { TwoD, Position, Follow }
@@ -34,6 +41,7 @@ namespace kinatraa.fmodaudio
             public float Pitch = 1f;
             public bool Paused;
             public List<SoundParameterValue> QueuedParameters;
+            public int StartPosition = -1;     // timeline position (ms) requested while queued
             public int ActiveIndex = -1;
             public float QueuedAt;
         }
@@ -56,8 +64,12 @@ namespace kinatraa.fmodaudio
             public float DefaultVolume = 1f;
             public float Volume = 1f;
             public bool Muted;
+            public bool IsVca;               // BusPath is "vca:/..." (volume only; mute = volume 0, no stop)
             public Bus Bus;
             public bool HasBus;
+            public VCA Vca;
+            public bool HasVca;
+            public bool SetBeforeInit;       // volume/mute set by code before Initialize: kept when the config channel is added
         }
 
         private sealed class SnapshotSlot
@@ -74,6 +86,7 @@ namespace kinatraa.fmodaudio
             public bool LoadSamples;
             public bool RaiseLoaded;
             public Action<bool> Callback;
+            public float StartedAt;
         }
 
         private sealed class ConfigSceneBankProvider : ISoundBankProvider
@@ -123,6 +136,8 @@ namespace kinatraa.fmodaudio
         private static bool pausedByFocus;
         private static bool mutedByFocus;
         private static bool reapplyPause;
+        private static bool musicEndPending;
+        private static float fmodBusySince = -1f;
         private static SnapshotHandle pauseSnapshot;
 
         // ------------------------------------------------------------------ bootstrap
@@ -162,6 +177,8 @@ namespace kinatraa.fmodaudio
             pausedByFocus = false;
             mutedByFocus = false;
             reapplyPause = false;
+            musicEndPending = false;
+            fmodBusySince = -1f;
             pauseSnapshot = default;
             OnBusVolumeChanged = null;
             OnBusMuteChanged = null;
@@ -256,7 +273,12 @@ namespace kinatraa.fmodaudio
             initialized = false;
             SceneManager.sceneLoaded -= HandleSceneLoaded;
             SceneManager.sceneUnloaded -= HandleSceneUnloaded;
+            FlushSettingsInternal();
 
+            // The music slot is cleared silently: shutting down is not a music change.
+            music = default;
+            musicCueId = null;
+            musicEndPending = false;
             for (int i = active.Count - 1; i >= 0; i--)
             {
                 Slot s = slots[active[i]];
@@ -284,14 +306,14 @@ namespace kinatraa.fmodaudio
                 for (int n = 0; n < kv.Value; n++) FmodBackend.UnloadBank(kv.Key);
             }
 
+            // Pending LoadBankAsync callbacks complete with false so callers never wait forever.
+            var pending = bankOps.Count > 0 ? new List<BankOp>(bankOps) : null;
             bankRefs.Clear();
             bankOps.Clear();
             sceneBanks.Clear();
             cues.Clear();
             libraries.Clear();
             channels.Clear();
-            music = default;
-            musicCueId = null;
             paused = false;
             pausedByFocus = false;
             reapplyPause = false;
@@ -304,6 +326,10 @@ namespace kinatraa.fmodaudio
             root = null;
             updater = null;
             if (destroyRoot && go != null) UnityEngine.Object.Destroy(go);
+            if (pending != null)
+            {
+                foreach (BankOp op in pending) InvokeBankCallback(op, false);
+            }
             SoundLog.Info("Shut down.");
         }
 
@@ -331,12 +357,12 @@ namespace kinatraa.fmodaudio
             }
             if (!cues.TryGetValue(cueId, out CueState cue))
             {
-                SoundLog.WarningOnce("cue:" + cueId, $"Unknown cue id '{cueId}'. Add it to a registered SoundCueLibrary.");
+                if (SoundLog.First("cue", cueId)) SoundLog.Warning($"Unknown cue id '{cueId}'. Add it to a registered SoundCueLibrary.");
                 return default;
             }
 
             var request = new SoundPlayRequest { CueId = cueId, Channel = cue.Cue.Channel, Volume = 1f, Pitch = 1f };
-            if (policy != null && !policy.OnBeforePlay(ref request)) return default;
+            if (!PolicyAllows(ref request)) return default;
 
             float now = Time.unscaledTime;
             if (cue.Cue.Cooldown > 0f && now - cue.LastPlayTime < cue.Cue.Cooldown) return default;
@@ -357,8 +383,33 @@ namespace kinatraa.fmodaudio
             if (handle.Index == 0) return default;
             cue.LastPlayTime = now;
             if (cue.Cue.MaxInstances > 0) cue.Live.Add(handle);
-            OnCuePlayed?.Invoke(cueId, handle);
+            if (OnCuePlayed != null)
+            {
+                try
+                {
+                    OnCuePlayed(cueId, handle);
+                }
+                catch (Exception e)
+                {
+                    SoundLog.Exception("An OnCuePlayed handler", e);
+                }
+            }
             return handle;
+        }
+
+        /// <summary>Runs the policy hook. A throwing policy is logged and treated as "allow" so game code cannot break audio.</summary>
+        private static bool PolicyAllows(ref SoundPlayRequest request)
+        {
+            if (policy == null) return true;
+            try
+            {
+                return policy.OnBeforePlay(ref request);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("ISoundPolicy.OnBeforePlay", e);
+                return true;
+            }
         }
 
         private static SoundHandle PlayEvent(EventReference reference, SpaceMode space, Vector3 position, Transform follow)
@@ -370,7 +421,7 @@ namespace kinatraa.fmodaudio
                 return default;
             }
             var request = new SoundPlayRequest { CueId = null, Channel = default, Volume = 1f, Pitch = 1f };
-            if (policy != null && !policy.OnBeforePlay(ref request)) return default;
+            if (!PolicyAllows(ref request)) return default;
             return Spawn(null, reference, request, space, position, follow);
         }
 
@@ -388,12 +439,14 @@ namespace kinatraa.fmodaudio
             s.Pitch = request.Pitch;
             s.Paused = false;
             s.Held = cue != null && !cue.Cue.AutoRelease;
+            s.StartPosition = -1;
             s.QueuedParameters?.Clear();
             s.State = SlotState.Queued; // not in the queue yet; TryStart makes it Active, FreeSlot recycles it
             var handle = new SoundHandle(index + 1, s.Generation);
 
-            if (FmodBackend.AllBanksLoaded && TryStart(s, index, bankOps.Count == 0)) return handle;
-            if (FmodBackend.AllBanksLoaded && bankOps.Count == 0)
+            bool settled = BanksSettled;
+            if (settled && TryStart(s, index, bankOps.Count == 0)) return handle;
+            if (settled && bankOps.Count == 0)
             {
                 FreeSlot(index);
                 return default;
@@ -424,10 +477,10 @@ namespace kinatraa.fmodaudio
                 }
                 if (!s.Cue.HasDescription)
                 {
-                    if (logFailure)
+                    if (logFailure && SoundLog.First("event", s.Cue.Cue.Id))
                     {
-                        SoundLog.WarningOnce("event:" + s.Cue.Cue.Id, $"Cue '{s.Cue.Cue.Id}': event {FmodBackend.Describe(s.Cue.Cue.Event)} not found. " +
-                                                                     "Is it assigned, built, and is its bank loaded?");
+                        SoundLog.Warning($"Cue '{s.Cue.Cue.Id}': event {FmodBackend.Describe(s.Cue.Cue.Event)} not found. " +
+                                         "Is it assigned, built, and is its bank loaded?");
                     }
                     return false;
                 }
@@ -435,13 +488,19 @@ namespace kinatraa.fmodaudio
             }
             else if (!FmodBackend.TryGetEvent(s.Reference, out description))
             {
-                if (logFailure) SoundLog.WarningOnce("event:" + FmodBackend.Describe(s.Reference), $"Event {FmodBackend.Describe(s.Reference)} not found. Is its bank loaded?");
+                if (logFailure && SoundLog.First("event-ref", FmodBackend.Describe(s.Reference)))
+                {
+                    SoundLog.Warning($"Event {FmodBackend.Describe(s.Reference)} not found. Is its bank loaded?");
+                }
                 return false;
             }
 
             if (!FmodBackend.CreateInstance(description, out EventInstance instance))
             {
-                if (logFailure) SoundLog.WarningOnce("create:" + FmodBackend.GetPath(description), $"Could not create an instance of {FmodBackend.GetPath(description)}.");
+                if (logFailure && SoundLog.First("create", FmodBackend.GetPath(description)))
+                {
+                    SoundLog.Warning($"Could not create an instance of {FmodBackend.GetPath(description)}.");
+                }
                 return false;
             }
 
@@ -457,6 +516,7 @@ namespace kinatraa.fmodaudio
             }
             if (s.Volume != 1f) FmodBackend.SetVolume(instance, s.Volume);
             if (s.Pitch != 1f) FmodBackend.SetPitch(instance, s.Pitch);
+            if (s.StartPosition >= 0) FmodBackend.SetTimelinePosition(instance, s.StartPosition);
 
             if (s.Space == SpaceMode.Follow && s.Follow != null)
             {
@@ -488,9 +548,9 @@ namespace kinatraa.fmodaudio
         private static void ApplyParameter(EventInstance instance, string name, float value)
         {
             if (string.IsNullOrEmpty(name)) return;
-            if (!FmodBackend.SetParameter(instance, name, value))
+            if (!FmodBackend.SetParameter(instance, name, value) && SoundLog.First("param", name))
             {
-                SoundLog.WarningOnce("param:" + name, $"Parameter '{name}' not found on {FmodBackend.GetPath(GetDescriptionOf(instance))}.");
+                SoundLog.Warning($"Parameter '{name}' not found on {FmodBackend.GetPath(GetDescriptionOf(instance))}.");
             }
         }
 
@@ -527,6 +587,14 @@ namespace kinatraa.fmodaudio
             {
                 s.Attached = false;
                 attachedCount--;
+            }
+            if (musicCueId != null && music.Index == index + 1 && music.Generation == s.Generation)
+            {
+                // The music slot ended (stopped, finished, dropped from the queue): OnMusicChanged(null) is raised at
+                // the next safe point (end of the public call or of the update) rather than from inside loops.
+                music = default;
+                musicCueId = null;
+                musicEndPending = true;
             }
             s.State = SlotState.Free;
             s.Generation++;
@@ -605,6 +673,13 @@ namespace kinatraa.fmodaudio
             return TryGetSlot(h, out Slot s, out _) && s.Cue != null ? s.Cue.Cue.Id : null;
         }
 
+        /// <summary>Entry point of <see cref="SoundHandle.Stop"/>: stops and raises pending events.</summary>
+        internal static void HandleStopPublic(SoundHandle h, bool allowFadeOut)
+        {
+            HandleStop(h, allowFadeOut);
+            RaisePendingMusicEnd();
+        }
+
         internal static void HandleStop(SoundHandle h, bool allowFadeOut)
         {
             if (!TryGetSlot(h, out Slot s, out int index)) return;
@@ -679,11 +754,76 @@ namespace kinatraa.fmodaudio
             if (s.State == SlotState.Active) FmodBackend.SetPitch(s.Instance, pitch);
         }
 
+        internal static bool HandleTryGetParameter(SoundHandle h, string name, out float value)
+        {
+            value = 0f;
+            if (string.IsNullOrEmpty(name) || !TryGetLiveSlot(h, out Slot s)) return false;
+            if (s.State == SlotState.Active) return FmodBackend.TryGetParameter(s.Instance, name, out value);
+            if (s.QueuedParameters != null)
+            {
+                for (int i = 0; i < s.QueuedParameters.Count; i++)
+                {
+                    if (s.QueuedParameters[i].Name != name) continue;
+                    value = s.QueuedParameters[i].Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        internal static void HandleSetPosition(SoundHandle h, Vector3 position)
+        {
+            if (!TryGetLiveSlot(h, out Slot s)) return;
+            if (s.Attached)
+            {
+                s.Attached = false;
+                attachedCount--;
+            }
+            s.Follow = null;
+            s.Space = SpaceMode.Position;
+            s.Position = position;
+            if (s.State == SlotState.Active) FmodBackend.Set3D(s.Instance, position);
+        }
+
+        internal static void HandleAttachTo(SoundHandle h, Transform target)
+        {
+            if (target == null)
+            {
+                SoundLog.WarningOnce("attach-null", "SoundHandle.AttachTo called with a null transform; use SetPosition to detach.");
+                return;
+            }
+            if (!TryGetLiveSlot(h, out Slot s)) return;
+            s.Follow = target;
+            s.Space = SpaceMode.Follow;
+            if (s.State != SlotState.Active) return;
+            FmodBackend.Set3D(s.Instance, target);
+            if (!s.Attached)
+            {
+                s.Attached = true;
+                attachedCount++;
+                RefreshUpdater();
+            }
+        }
+
+        internal static int HandleGetTimelinePosition(SoundHandle h)
+        {
+            if (!TryGetLiveSlot(h, out Slot s)) return 0;
+            return s.State == SlotState.Active ? FmodBackend.GetTimelinePosition(s.Instance) : Mathf.Max(0, s.StartPosition);
+        }
+
+        internal static void HandleSetTimelinePosition(SoundHandle h, int milliseconds)
+        {
+            if (!TryGetLiveSlot(h, out Slot s)) return;
+            milliseconds = Mathf.Max(0, milliseconds);
+            if (s.State == SlotState.Active) FmodBackend.SetTimelinePosition(s.Instance, milliseconds);
+            else s.StartPosition = milliseconds;
+        }
+
         // ------------------------------------------------------------------ update (runs only while something needs it)
 
         private static void RefreshUpdater()
         {
-            if (updater != null) updater.enabled = active.Count > 0 || queued.Count > 0 || bankOps.Count > 0 || reapplyPause;
+            if (updater != null) updater.enabled = active.Count > 0 || queued.Count > 0 || bankOps.Count > 0 || reapplyPause || musicEndPending;
         }
 
         internal static void Tick()
@@ -699,8 +839,11 @@ namespace kinatraa.fmodaudio
                 if (paused && config.PauseMode != SoundPauseMode.Snapshot) FmodBackend.SetMasterPaused(true);
             }
             if (bankOps.Count > 0) PollBankOps();
-            if (queued.Count > 0 && FmodBackend.AllBanksLoaded) FlushQueue();
-            else if (queued.Count > 0) DropExpiredQueuedPlays();
+            if (queued.Count > 0)
+            {
+                if (BanksSettled) FlushQueue();
+                DropExpiredQueuedPlays();
+            }
             if (attachedCount > 0) UpdateAttached();
 
             float now = Time.unscaledTime;
@@ -709,7 +852,54 @@ namespace kinatraa.fmodaudio
                 nextSweepTime = now + SweepInterval;
                 Sweep();
             }
+            RaisePendingMusicEnd();
             RefreshUpdater();
+        }
+
+        /// <summary>
+        /// True when FMOD has no bank load in flight. If FMOD reports loading for longer than <see cref="BankLoadTimeout"/>
+        /// (a failed asynchronous load never clears FMOD's counter), it is treated as settled so playback continues.
+        /// </summary>
+        private static bool BanksSettled
+        {
+            get
+            {
+                if (FmodBackend.AllBanksLoaded)
+                {
+                    fmodBusySince = -1f;
+                    return true;
+                }
+                if (!FmodBackend.IsAlive) return false;
+                float now = Time.unscaledTime;
+                if (fmodBusySince < 0f) fmodBusySince = now;
+                if (now - fmodBusySince < BankLoadTimeout) return false;
+                if (SoundLog.First("fmod-loading", string.Empty))
+                {
+                    SoundLog.Warning($"FMOD still reports a bank load in progress after {BankLoadTimeout} s; a bank probably failed to load " +
+                                     "(check the bank names in the config). Playback continues without waiting for it.");
+                }
+                return true;
+            }
+        }
+
+        private static void RaisePendingMusicEnd()
+        {
+            if (!musicEndPending) return;
+            musicEndPending = false;
+            RaiseMusicChanged(null);
+        }
+
+        private static void RaiseMusicChanged(string cueId)
+        {
+            if (OnMusicChanged == null) return;
+            try
+            {
+                OnMusicChanged(cueId);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("An OnMusicChanged handler", e);
+            }
         }
 
         private static void FlushQueue()
@@ -802,7 +992,9 @@ namespace kinatraa.fmodaudio
             {
                 if (slots[queued[i]].Channel == channel) FreeSlot(queued[i]);
             }
-            if (cs != null && ResolveBus(cs)) FmodBackend.StopBus(cs.Bus, allowFadeOut);
+            // A VCA cannot stop events; only the channel's tracked sounds are stopped then.
+            if (cs != null && !cs.IsVca && ResolveMixer(cs)) FmodBackend.StopBus(cs.Bus, allowFadeOut);
+            RaisePendingMusicEnd();
             RefreshUpdater();
         }
 
@@ -816,12 +1008,7 @@ namespace kinatraa.fmodaudio
             }
             for (int i = queued.Count - 1; i >= 0; i--) FreeSlot(queued[i]);
             if (FmodBackend.TryGetBus(FmodBackend.MasterBusPath, out Bus master)) FmodBackend.StopBus(master, allowFadeOut);
-            if (musicCueId != null)
-            {
-                music = default;
-                musicCueId = null;
-                OnMusicChanged?.Invoke(null);
-            }
+            RaisePendingMusicEnd();
             RefreshUpdater();
         }
 
@@ -831,22 +1018,24 @@ namespace kinatraa.fmodaudio
         {
             if (!restartIfPlaying && musicCueId == cueId && HandleIsValid(music)) return music;
             SoundHandle next = PlayCue(cueId, SpaceMode.TwoD, default, null);
-            if (next.Index == 0) return default;
+            if (next.Index == 0)
+            {
+                RaisePendingMusicEnd();
+                return default;
+            }
             SoundHandle previous = music;
             music = next;
             musicCueId = cueId;
+            musicEndPending = false; // the slot changes to the new cue; no "stopped" notification in between
             HandleStop(previous, true);
-            OnMusicChanged?.Invoke(cueId);
+            RaiseMusicChanged(cueId);
             return next;
         }
 
         private static void StopMusicInternal(bool allowFadeOut)
         {
-            HandleStop(music, allowFadeOut);
-            bool hadMusic = musicCueId != null;
-            music = default;
-            musicCueId = null;
-            if (hadMusic) OnMusicChanged?.Invoke(null);
+            HandleStop(music, allowFadeOut); // frees the music slot, which schedules OnMusicChanged(null)
+            RaisePendingMusicEnd();
         }
 
         // ------------------------------------------------------------------ global parameters, snapshots, pause
@@ -854,7 +1043,7 @@ namespace kinatraa.fmodaudio
         private static void SetGlobalParameterInternal(string name, float value)
         {
             if (!EnsureRunning() || string.IsNullOrEmpty(name)) return;
-            if (!FmodBackend.SetGlobalParameter(name, value)) SoundLog.WarningOnce("global:" + name, $"Global parameter '{name}' not found.");
+            if (!FmodBackend.SetGlobalParameter(name, value) && SoundLog.First("global", name)) SoundLog.Warning($"Global parameter '{name}' not found.");
         }
 
         private static SnapshotHandle PushSnapshotInternal(string nameOrPath)
@@ -955,7 +1144,22 @@ namespace kinatraa.fmodaudio
                     ApplyAllChannels();
                     break;
             }
-            policy?.OnFocusChanged(hasFocus);
+            if (!hasFocus) FlushSettingsInternal();
+            if (policy == null) return;
+            try
+            {
+                policy.OnFocusChanged(hasFocus);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("ISoundPolicy.OnFocusChanged", e);
+            }
+        }
+
+        /// <summary>The app is being suspended (mobile background, minimized player): persist settings now.</summary>
+        internal static void HandleApplicationSuspended()
+        {
+            if (initialized) FlushSettingsInternal();
         }
 
         /// <summary>FMOD for Unity unpauses the master bus when a mobile app resumes; re-apply our pause next frame.</summary>
@@ -966,20 +1170,43 @@ namespace kinatraa.fmodaudio
             RefreshUpdater();
         }
 
+        private static void FlushSettingsInternal()
+        {
+            if (!(store is IFlushableSoundSettingsStore flushable)) return;
+            try
+            {
+                flushable.Flush();
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("Flushing the settings store", e);
+            }
+        }
+
         // ------------------------------------------------------------------ channels & settings
 
         private static string DefaultBusPath(string channelName) => channelName == "Master" ? FmodBackend.MasterBusPath : "bus:/" + channelName;
 
+        private static bool IsVcaPath(string path) => path != null && path.StartsWith(FmodBackend.VcaPrefix, StringComparison.Ordinal);
+
         private static void AddChannel(SoundChannelDefinition def)
         {
             if (def == null || string.IsNullOrEmpty(def.Name)) return;
+            string busPath = string.IsNullOrEmpty(def.BusPath) ? DefaultBusPath(def.Name) : def.BusPath;
             var cs = new ChannelState
             {
                 Channel = new SoundChannel(def.Name),
-                BusPath = string.IsNullOrEmpty(def.BusPath) ? DefaultBusPath(def.Name) : def.BusPath,
+                BusPath = busPath,
+                IsVca = IsVcaPath(busPath),
                 DefaultVolume = Mathf.Clamp01(def.DefaultVolume),
             };
             LoadChannelSettings(cs);
+            if (channels.TryGetValue(def.Name, out ChannelState earlier) && earlier.SetBeforeInit)
+            {
+                // Values set from code before Initialize (AutoInitialize off) win over the store and the default.
+                cs.Volume = earlier.Volume;
+                cs.Muted = earlier.Muted;
+            }
             channels[def.Name] = cs;
         }
 
@@ -988,34 +1215,62 @@ namespace kinatraa.fmodaudio
             if (!channel.IsValid) return null;
             if (channels.TryGetValue(channel.Name, out ChannelState cs)) return cs;
             if (!create) return null;
-            cs = new ChannelState { Channel = channel, BusPath = DefaultBusPath(channel.Name) };
+            string busPath = DefaultBusPath(channel.Name);
+            cs = new ChannelState { Channel = channel, BusPath = busPath, IsVca = IsVcaPath(busPath) };
             LoadChannelSettings(cs);
             channels[channel.Name] = cs;
-            SoundLog.Info($"Channel '{channel.Name}' is not in the config; using bus '{cs.BusPath}'.");
+            if (initialized) SoundLog.Info($"Channel '{channel.Name}' is not in the config; using bus '{cs.BusPath}'.");
             return cs;
         }
 
         private static void LoadChannelSettings(ChannelState cs)
         {
-            cs.Volume = store != null && store.TryLoad(cs.Channel.Name, out float v) ? Mathf.Clamp01(v) : cs.DefaultVolume;
-            cs.Muted = store != null && store.TryLoadMuted(cs.Channel.Name, out bool m) && m;
+            cs.Volume = cs.DefaultVolume;
+            cs.Muted = false;
+            if (store == null) return;
+            try
+            {
+                if (store.TryLoad(cs.Channel.Name, out float v)) cs.Volume = Mathf.Clamp01(v);
+                cs.Muted = store.TryLoadMuted(cs.Channel.Name, out bool m) && m;
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception($"The settings store (loading '{cs.Channel.Name}')", e);
+            }
         }
 
-        private static bool ResolveBus(ChannelState cs)
+        /// <summary>Resolves the channel's FMOD bus or VCA (cached while the handle stays valid).</summary>
+        private static bool ResolveMixer(ChannelState cs)
         {
+            if (cs.IsVca)
+            {
+                if (cs.HasVca && FmodBackend.IsValid(cs.Vca)) return true;
+                cs.HasVca = FmodBackend.TryGetVca(cs.BusPath, out cs.Vca);
+                if (!cs.HasVca && FmodBackend.AllBanksLoaded && SoundLog.First("vca", cs.BusPath))
+                {
+                    SoundLog.Warning($"VCA '{cs.BusPath}' (channel '{cs.Channel.Name}') not found. Create it in FMOD Studio (Mixer > VCAs), " +
+                                     "assign it to the Master bank, rebuild, or fix the channel's bus path in the config.");
+                }
+                return cs.HasVca;
+            }
             if (cs.HasBus && FmodBackend.IsValid(cs.Bus)) return true;
             cs.HasBus = FmodBackend.TryGetBus(cs.BusPath, out cs.Bus);
-            if (!cs.HasBus && FmodBackend.AllBanksLoaded)
+            if (!cs.HasBus && FmodBackend.AllBanksLoaded && SoundLog.First("bus", cs.BusPath))
             {
-                SoundLog.WarningOnce("bus:" + cs.BusPath, $"Bus '{cs.BusPath}' (channel '{cs.Channel.Name}') not found. " +
-                                                          "Create it in FMOD Studio, rebuild banks, or fix the channel's bus path in the config.");
+                SoundLog.Warning($"Bus '{cs.BusPath}' (channel '{cs.Channel.Name}') not found. " +
+                                 "Create it in FMOD Studio, rebuild banks, or fix the channel's bus path in the config.");
             }
             return cs.HasBus;
         }
 
         private static void ApplyChannel(ChannelState cs)
         {
-            if (!initialized || !ResolveBus(cs)) return;
+            if (!initialized || !ResolveMixer(cs)) return;
+            if (cs.IsVca)
+            {
+                FmodBackend.SetVcaVolume(cs.Vca, cs.Muted ? 0f : cs.Volume); // VCAs have no mute
+                return;
+            }
             FmodBackend.SetBusVolume(cs.Bus, cs.Volume);
             bool isMaster = cs.BusPath == FmodBackend.MasterBusPath;
             FmodBackend.SetBusMuted(cs.Bus, cs.BusPath, cs.Muted || (isMaster && mutedByFocus));
@@ -1033,34 +1288,110 @@ namespace kinatraa.fmodaudio
             volume = Mathf.Clamp01(volume);
             bool changed = cs.Volume != volume;
             cs.Volume = volume;
+            if (!initialized) cs.SetBeforeInit = true;
             ApplyChannel(cs);
-            if (save) store?.Save(cs.Channel.Name, volume);
-            if (changed) OnBusVolumeChanged?.Invoke(cs.Channel, volume);
+            if (save) SaveVolume(cs);
+            if (changed) RaiseVolumeChanged(cs);
         }
 
-        private static void SetBusMutedInternal(SoundChannel channel, bool muted)
+        private static void SetBusMutedInternal(SoundChannel channel, bool muted, bool save = true)
         {
             ChannelState cs = GetChannel(channel, true);
             if (cs == null) return;
             bool changed = cs.Muted != muted;
             cs.Muted = muted;
+            if (!initialized) cs.SetBeforeInit = true;
             ApplyChannel(cs);
-            store?.SaveMuted(cs.Channel.Name, muted);
-            if (changed) OnBusMuteChanged?.Invoke(cs.Channel, muted);
+            if (save) SaveMuted(cs);
+            if (changed) RaiseMuteChanged(cs);
+        }
+
+        private static void ResetVolumesInternal(bool save)
+        {
+            // Copy: change handlers may add channels while we iterate.
+            foreach (ChannelState cs in new List<ChannelState>(channels.Values))
+            {
+                bool volumeChanged = cs.Volume != cs.DefaultVolume;
+                bool muteChanged = cs.Muted;
+                cs.Volume = cs.DefaultVolume;
+                cs.Muted = false;
+                ApplyChannel(cs);
+                if (save)
+                {
+                    SaveVolume(cs);
+                    SaveMuted(cs);
+                }
+                if (volumeChanged) RaiseVolumeChanged(cs);
+                if (muteChanged) RaiseMuteChanged(cs);
+            }
+            if (save) FlushSettingsInternal();
+        }
+
+        private static void SaveVolume(ChannelState cs)
+        {
+            if (store == null) return;
+            try
+            {
+                store.Save(cs.Channel.Name, cs.Volume);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception($"The settings store (saving '{cs.Channel.Name}')", e);
+            }
+        }
+
+        private static void SaveMuted(ChannelState cs)
+        {
+            if (store == null) return;
+            try
+            {
+                store.SaveMuted(cs.Channel.Name, cs.Muted);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception($"The settings store (saving '{cs.Channel.Name}' mute)", e);
+            }
+        }
+
+        private static void RaiseVolumeChanged(ChannelState cs)
+        {
+            if (OnBusVolumeChanged == null) return;
+            try
+            {
+                OnBusVolumeChanged(cs.Channel, cs.Volume);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("An OnBusVolumeChanged handler", e);
+            }
+        }
+
+        private static void RaiseMuteChanged(ChannelState cs)
+        {
+            if (OnBusMuteChanged == null) return;
+            try
+            {
+                OnBusMuteChanged(cs.Channel, cs.Muted);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception("An OnBusMuteChanged handler", e);
+            }
         }
 
         private static void SetSettingsStoreInternal(ISoundSettingsStore settingsStore)
         {
+            FlushSettingsInternal(); // persist what the previous store holds before switching
             store = settingsStore;
-            foreach (KeyValuePair<string, ChannelState> kv in channels)
+            foreach (ChannelState cs in new List<ChannelState>(channels.Values))
             {
-                ChannelState cs = kv.Value;
                 float oldVolume = cs.Volume;
                 bool oldMuted = cs.Muted;
                 LoadChannelSettings(cs);
+                cs.SetBeforeInit = false;
                 ApplyChannel(cs);
-                if (oldVolume != cs.Volume) OnBusVolumeChanged?.Invoke(cs.Channel, cs.Volume);
-                if (oldMuted != cs.Muted) OnBusMuteChanged?.Invoke(cs.Channel, cs.Muted);
+                if (oldVolume != cs.Volume) RaiseVolumeChanged(cs);
+                if (oldMuted != cs.Muted) RaiseMuteChanged(cs);
             }
         }
 
@@ -1106,19 +1437,19 @@ namespace kinatraa.fmodaudio
             if (!EnsureRunning() || string.IsNullOrEmpty(bankName)) return false;
             if (!FmodBackend.LoadBank(bankName, loadSamples, out string error))
             {
-                SoundLog.ErrorOnce("bank:" + bankName, $"Could not load bank '{bankName}': {error}");
+                if (SoundLog.First("bank", bankName)) SoundLog.Error($"Could not load bank '{bankName}': {error}");
                 return false;
             }
             bool first = AddBankRef(bankName);
             bankEpoch++;
             if (FmodBackend.HasBankLoaded(bankName))
             {
-                if (first) OnBankLoaded?.Invoke(bankName);
+                if (first) RaiseBankEvent(OnBankLoaded, bankName, "OnBankLoaded");
                 if (!startingUp) ApplyAllChannels();
             }
             else
             {
-                bankOps.Add(new BankOp { Name = bankName, RaiseLoaded = first });
+                bankOps.Add(new BankOp { Name = bankName, RaiseLoaded = first, StartedAt = Time.unscaledTime });
                 RefreshUpdater();
             }
             return true;
@@ -1126,20 +1457,47 @@ namespace kinatraa.fmodaudio
 
         private static void LoadBankAsyncInternal(string bankName, Action<bool> onComplete, bool loadSamples)
         {
+            var op = new BankOp { Name = bankName, LoadSamples = loadSamples, Callback = onComplete, StartedAt = Time.unscaledTime };
             if (!EnsureRunning() || string.IsNullOrEmpty(bankName))
             {
-                onComplete?.Invoke(false);
+                InvokeBankCallback(op, false);
                 return;
             }
             if (!FmodBackend.LoadBank(bankName, loadSamples, out string error))
             {
-                SoundLog.ErrorOnce("bank:" + bankName, $"Could not load bank '{bankName}': {error}");
-                onComplete?.Invoke(false);
+                if (SoundLog.First("bank", bankName)) SoundLog.Error($"Could not load bank '{bankName}': {error}");
+                InvokeBankCallback(op, false);
                 return;
             }
-            bool first = AddBankRef(bankName);
-            bankOps.Add(new BankOp { Name = bankName, LoadSamples = loadSamples, RaiseLoaded = first, Callback = onComplete });
+            op.RaiseLoaded = AddBankRef(bankName);
+            bankOps.Add(op);
             RefreshUpdater();
+        }
+
+        private static void InvokeBankCallback(BankOp op, bool success)
+        {
+            if (op.Callback == null) return;
+            try
+            {
+                op.Callback(success);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception($"The LoadBankAsync('{op.Name}') callback", e);
+            }
+        }
+
+        private static void RaiseBankEvent(Action<string> handler, string bankName, string eventName)
+        {
+            if (handler == null) return;
+            try
+            {
+                handler(bankName);
+            }
+            catch (Exception e)
+            {
+                SoundLog.Exception($"An {eventName} handler", e);
+            }
         }
 
         private static bool AddBankRef(string bankName)
@@ -1151,24 +1509,34 @@ namespace kinatraa.fmodaudio
 
         private static void PollBankOps()
         {
+            float now = Time.unscaledTime;
             for (int i = bankOps.Count - 1; i >= 0; i--)
             {
+                if (i >= bankOps.Count) continue; // a callback changed the list
                 BankOp op = bankOps[i];
+                bool timedOut = now - op.StartedAt >= BankLoadTimeout;
                 if (!FmodBackend.HasBankLoaded(op.Name))
                 {
-                    if (!FmodBackend.AllBanksLoaded) continue; // still loading (WebGL / Android OBB)
+                    // Still loading (WebGL / Android OBB), unless FMOD is idle or the deadline passed.
+                    if (!FmodBackend.AllBanksLoaded && !timedOut) continue;
                     bankOps.RemoveAt(i);
                     ReleaseBankRef(op.Name);
-                    SoundLog.ErrorOnce("bank:" + op.Name, $"Bank '{op.Name}' failed to load.");
-                    op.Callback?.Invoke(false);
+                    if (SoundLog.First("bank", op.Name))
+                    {
+                        SoundLog.Error(timedOut
+                            ? $"Bank '{op.Name}' did not finish loading within {BankLoadTimeout} s; treated as failed."
+                            : $"Bank '{op.Name}' failed to load.");
+                    }
+                    InvokeBankCallback(op, false);
                     continue;
                 }
-                if (op.LoadSamples && FmodBackend.IsSampleDataLoading(op.Name)) continue;
+                // Sample data that never finishes loading does not block the callback forever either.
+                if (op.LoadSamples && !timedOut && FmodBackend.IsSampleDataLoading(op.Name)) continue;
                 bankOps.RemoveAt(i);
                 bankEpoch++;
                 ApplyAllChannels();
-                if (op.RaiseLoaded) OnBankLoaded?.Invoke(op.Name);
-                op.Callback?.Invoke(true);
+                if (op.RaiseLoaded) RaiseBankEvent(OnBankLoaded, op.Name, "OnBankLoaded");
+                InvokeBankCallback(op, true);
             }
         }
 
@@ -1187,12 +1555,12 @@ namespace kinatraa.fmodaudio
             int remaining = ReleaseBankRef(bankName);
             if (remaining < 0)
             {
-                SoundLog.WarningOnce("unload:" + bankName, $"UnloadBank('{bankName}') called without a matching LoadBank.");
+                if (SoundLog.First("unload", bankName)) SoundLog.Warning($"UnloadBank('{bankName}') called without a matching LoadBank.");
                 return;
             }
             FmodBackend.UnloadBank(bankName);
             bankEpoch++;
-            if (remaining == 0) OnBankUnloaded?.Invoke(bankName);
+            if (remaining == 0) RaiseBankEvent(OnBankUnloaded, bankName, "OnBankUnloaded");
         }
 
         private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -1205,7 +1573,7 @@ namespace kinatraa.fmodaudio
             }
             catch (Exception e)
             {
-                SoundLog.Error($"Bank provider failed for scene '{scene.name}': {e.Message}");
+                SoundLog.Exception($"ISoundBankProvider.GetBanksForScene('{scene.name}')", e);
             }
             for (int i = banks.Count - 1; i >= 0; i--)
             {
@@ -1302,5 +1670,8 @@ namespace kinatraa.fmodaudio
         }
 
         internal static string FmodVersion => FmodBackend.VersionString;
+
+        /// <summary>Bus or VCA path of a channel (null when unknown).</summary>
+        internal static string DebugGetChannelPath(SoundChannel channel) => GetChannel(channel, false)?.BusPath;
     }
 }

@@ -18,7 +18,26 @@ How it is used:
 - `Sound.SetBusVolume` / `SetBusMuted` apply to the FMOD bus, call `Save` / `SaveMuted`, and raise `OnBusVolumeChanged` / `OnBusMuteChanged`.
 - `Sound.SetSettingsStore(store)` swaps the store and **reloads and applies every channel immediately**.
 - `Sound.ApplyVolumes(dict, save: false)` / `Sound.GetAllVolumes()` for games that serialize their own settings object.
+- `Sound.ResetVolumes(save: true)` restores every channel's configured *Default Volume* and unmutes it (a "Reset to defaults" button).
+- `Sound.SaveSettings()` flushes a store that buffers writes (see below). It also happens automatically on focus loss, app
+  suspension (mobile background), quit and `Sound.Shutdown()`.
+- Values set with `SetBusVolume` / `SetBusMuted` before the system initializes (only possible with *Auto Initialize* off) are
+  kept and applied when it starts.
 - Config > *Persist Settings* off and no custom store: nothing is saved.
+- A store that throws is logged and treated as "nothing saved"; it never breaks playback.
+
+### Stores that buffer writes
+
+Implement `IFlushableSoundSettingsStore` (an `ISoundSettingsStore` with `void Flush()`) when writing on every `Save` is too
+expensive, e.g. a file written once per settings change instead of once per slider tick:
+
+```csharp
+public sealed class BufferedJsonStore : IFlushableSoundSettingsStore
+{
+    // ... TryLoad / Save / TryLoadMuted / SaveMuted update an in-memory object and set dirty = true ...
+    public void Flush() { if (dirty) { File.WriteAllText(path, JsonUtility.ToJson(data)); dirty = false; } }
+}
+```
 
 ## Example 1: PlayerPrefs (default)
 
@@ -30,8 +49,9 @@ Nothing to do. With *Persist Settings* on, the system uses `PlayerPrefsSoundSett
 Sound.SetSettingsStore(new PlayerPrefsSoundSettingsStore("profile2.audio."));
 ```
 
-PlayerPrefs are written to disk by Unity on quit; call `PlayerPrefs.Save()` from your settings menu's "Apply" button if you
-need them flushed earlier (mobile apps can be killed without a clean quit).
+The store implements `IFlushableSoundSettingsStore`: `PlayerPrefs.Save()` runs when something changed and the app loses focus,
+goes to the background, quits or the system shuts down, and whenever you call `Sound.SaveSettings()` (e.g. when the settings
+menu closes). Mobile apps killed while in the foreground lose only the changes since the last flush.
 
 ## Example 2: JSON save file
 
@@ -81,7 +101,7 @@ public sealed class JsonAudioSettingsStore : ISoundSettingsStore
 
     public void SaveMuted(string key, bool muted) { Entry e = Get(key, true); e.Muted = muted; e.HasMuted = true; Write(); }
 
-    void Write() => File.WriteAllText(path, JsonUtility.ToJson(data, true));
+    void Write() => File.WriteAllText(path, JsonUtility.ToJson(data, true));   // simple: writes on every change
 }
 
 // Install it once, as early as possible (e.g. in your boot scene):

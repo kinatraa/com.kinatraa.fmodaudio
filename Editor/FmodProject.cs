@@ -129,6 +129,7 @@ namespace kinatraa.fmodaudio.Editor
         public string FsproPath;
         public string SerializationModel;
         public readonly HashSet<string> BusPaths = new HashSet<string>(StringComparer.Ordinal);
+        public readonly HashSet<string> VcaPaths = new HashSet<string>(StringComparer.Ordinal);
         public readonly HashSet<string> SnapshotPaths = new HashSet<string>(StringComparer.Ordinal);
         public readonly HashSet<string> SnapshotNames = new HashSet<string>(StringComparer.Ordinal);
         public DateTime NewestMetadataUtc;
@@ -213,6 +214,10 @@ namespace kinatraa.fmodaudio.Editor
                     {
                         string path = BuildPath(kv.Key, names, parents, classes, "MixerMaster");
                         if (path != null) info.BusPaths.Add("bus:/" + path);
+                    }
+                    else if (kv.Value == "MixerVCA" && names.TryGetValue(kv.Key, out string vcaName))
+                    {
+                        info.VcaPaths.Add("vca:/" + vcaName);
                     }
                     else if (kv.Value == "Snapshot" && names.TryGetValue(kv.Key, out string snapName))
                     {

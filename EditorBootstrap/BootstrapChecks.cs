@@ -29,6 +29,11 @@ namespace kinatraa.fmodaudio.Editor
 
             uint version = FmodDetector.InstalledVersion;
             string where = Path.GetDirectoryName(FmodDetector.RuntimeAsmdefPath);
+            if (version == 0)
+            {
+                return SetupCheckResult.Warn($"FMOD for Unity detected ({where}) but its version could not be read. This package was tested with " +
+                                             $"{FmodDetector.FormatVersion(FmodDetector.TestedVersion)}.");
+            }
             if (version == FmodDetector.TestedVersion) return SetupCheckResult.Ok($"FMOD for Unity {FmodDetector.FormatVersion(version)} detected ({where}).");
             if (FmodDetector.IsSupportedLine(version))
             {
@@ -38,6 +43,8 @@ namespace kinatraa.fmodaudio.Editor
             return SetupCheckResult.Warn($"FMOD for Unity {FmodDetector.FormatVersion(version)} detected ({where}). This package was written and tested for " +
                                          $"{FmodDetector.FormatVersion(FmodDetector.TestedVersion)} (2.03 line). Other versions are not supported.");
         }
+
+        public override bool HasDetails => true;
 
         public override void DrawGUI()
         {
@@ -178,6 +185,7 @@ namespace kinatraa.fmodaudio.Editor
 
         public override bool CanFix(SetupCheckResult result) => result.Status == SetupStatus.Warning;
         public override string FixLabel => "Append entries";
+        public override bool HasDetails => File.Exists(GitIgnorePath) && MissingLines().Count > 0;
 
         public override void DrawGUI()
         {

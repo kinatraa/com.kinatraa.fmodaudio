@@ -13,6 +13,7 @@ namespace kinatraa.fmodaudio
     internal static class FmodBackend
     {
         internal const string MasterBusPath = "bus:/";
+        internal const string VcaPrefix = "vca:/";
 
         private static FMOD.Studio.System studio;
         private static readonly Dictionary<FMOD.GUID, EventDescription> eventsByGuid = new Dictionary<FMOD.GUID, EventDescription>(new GuidComparer());
@@ -210,6 +211,19 @@ namespace kinatraa.fmodaudio
             return instance.setParameterByID(pid, value) == FMOD.RESULT.OK;
         }
 
+        internal static bool TryGetParameter(EventInstance instance, string name, out float value)
+        {
+            value = 0f;
+            return instance.isValid() && instance.getParameterByName(name, out value) == FMOD.RESULT.OK;
+        }
+
+        internal static int GetTimelinePosition(EventInstance instance)
+        {
+            return instance.isValid() && instance.getTimelinePosition(out int position) == FMOD.RESULT.OK ? position : 0;
+        }
+
+        internal static void SetTimelinePosition(EventInstance instance, int milliseconds) => instance.setTimelinePosition(milliseconds);
+
         internal static bool TryGetParameterId(EventInstance instance, string name, out SoundParameterId id)
         {
             if (instance.isValid() && instance.getDescription(out EventDescription d) == FMOD.RESULT.OK) return TryGetParameterId(d, name, out id);
@@ -281,6 +295,18 @@ namespace kinatraa.fmodaudio
         {
             bus.stopAllEvents(allowFadeOut ? FMOD.Studio.STOP_MODE.ALLOWFADEOUT : FMOD.Studio.STOP_MODE.IMMEDIATE);
         }
+
+        // ---------------------------------------------------------------- VCAs
+
+        internal static bool TryGetVca(string path, out VCA vca)
+        {
+            vca = default;
+            return IsAlive && studio.getVCA(path, out vca) == FMOD.RESULT.OK && vca.isValid();
+        }
+
+        internal static bool IsValid(VCA vca) => vca.isValid();
+
+        internal static void SetVcaVolume(VCA vca, float volume) => vca.setVolume(volume);
 
         internal static void SetMasterPaused(bool paused)
         {

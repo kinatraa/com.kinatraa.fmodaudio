@@ -54,7 +54,7 @@ namespace kinatraa.fmodaudio
         public string CueId => Sound.HandleGetCueId(this);
 
         /// <summary>Stops the sound. With <paramref name="allowFadeOut"/> FMOD plays its AHDSR release / fade-out.</summary>
-        public void Stop(bool allowFadeOut = true) => Sound.HandleStop(this, allowFadeOut);
+        public void Stop(bool allowFadeOut = true) => Sound.HandleStopPublic(this, allowFadeOut);
 
         /// <summary>Pauses the sound.</summary>
         public void Pause() => Sound.HandleSetPaused(this, true);
@@ -70,6 +70,25 @@ namespace kinatraa.fmodaudio
 
         /// <summary>Looks up a parameter id on this sound's event. Returns an invalid id if not found.</summary>
         public SoundParameterId GetParameterId(string name) => Sound.HandleGetParameterId(this, name);
+
+        /// <summary>Reads a local event parameter (the value set by code, or the queued value). False when it does not exist.</summary>
+        public bool TryGetParameter(string name, out float value) => Sound.HandleTryGetParameter(this, name, out value);
+
+        /// <summary>Moves the sound to a world position. Detaches it if it was following a transform.</summary>
+        public void SetPosition(UnityEngine.Vector3 position) => Sound.HandleSetPosition(this, position);
+
+        /// <summary>Makes the sound follow <paramref name="target"/> (3D attributes updated every frame until it ends).</summary>
+        public void AttachTo(UnityEngine.Transform target) => Sound.HandleAttachTo(this, target);
+
+        /// <summary>
+        /// Timeline position in milliseconds. Setting it on a queued sound applies it when the sound starts. 0 for invalid
+        /// handles.
+        /// </summary>
+        public int TimelinePosition
+        {
+            get => Sound.HandleGetTimelinePosition(this);
+            set => Sound.HandleSetTimelinePosition(this, value);
+        }
 
         /// <summary>Sets the instance volume (linear gain, 1 = unchanged).</summary>
         public void SetVolume(float volume) => Sound.HandleSetVolume(this, volume);

@@ -151,7 +151,10 @@ namespace kinatraa.fmodaudio
 
         // ------------------------------------------------------------------ volumes
 
-        /// <summary>Sets a channel volume (linear 0..1) on its FMOD bus, saves it through the settings store and raises <see cref="OnBusVolumeChanged"/>.</summary>
+        /// <summary>
+        /// Sets a channel volume (linear 0..1) on its FMOD bus or VCA, saves it through the settings store and raises
+        /// <see cref="OnBusVolumeChanged"/>. Before initialization the value is kept and applied when the system starts.
+        /// </summary>
         public static void SetBusVolume(SoundChannel channel, float volume) => SetBusVolumeInternal(channel, volume, true);
 
         /// <summary>Current linear volume of a channel (1 for unknown channels).</summary>
@@ -161,7 +164,7 @@ namespace kinatraa.fmodaudio
             return cs != null ? cs.Volume : 1f;
         }
 
-        /// <summary>Mutes or unmutes a channel's bus, saves it and raises <see cref="OnBusMuteChanged"/>.</summary>
+        /// <summary>Mutes or unmutes a channel (a VCA channel is muted by setting its volume to 0), saves it and raises <see cref="OnBusMuteChanged"/>.</summary>
         public static void SetBusMuted(SoundChannel channel, bool muted) => SetBusMutedInternal(channel, muted);
 
         /// <summary>True when the channel is muted.</summary>
@@ -185,6 +188,19 @@ namespace kinatraa.fmodaudio
             foreach (KeyValuePair<string, ChannelState> kv in channels) result[kv.Key] = kv.Value.Volume;
             return result;
         }
+
+        /// <summary>
+        /// Restores every channel to its configured default volume and unmutes it, raising the change events.
+        /// With <paramref name="save"/> the defaults are written to the settings store (a "Reset to defaults" button).
+        /// </summary>
+        public static void ResetVolumes(bool save = true) => ResetVolumesInternal(save);
+
+        /// <summary>
+        /// Writes pending settings to disk when the store supports it (<see cref="IFlushableSoundSettingsStore"/>, e.g. the
+        /// default PlayerPrefs store). Called automatically on focus loss, app suspension, quit and shutdown; call it when
+        /// your settings menu closes to be safe against crashes.
+        /// </summary>
+        public static void SaveSettings() => FlushSettingsInternal();
 
         /// <summary>Names of every known channel (configured or used).</summary>
         public static void GetChannels(List<SoundChannel> into)
@@ -244,7 +260,9 @@ namespace kinatraa.fmodaudio
 
         /// <summary>
         /// Loads a bank and invokes <paramref name="onComplete"/> (true on success) once it is available and, if
-        /// requested, its sample data finished loading. The callback runs on the main thread, at the earliest next frame.
+        /// requested, its sample data finished loading. The callback runs on the main thread, at the earliest next frame;
+        /// it runs immediately with false when the request is rejected up front (not initialized, empty name, bank file
+        /// missing). A load that has not finished after 30 s, or is still pending at <see cref="Shutdown"/>, completes with false.
         /// </summary>
         public static void LoadBankAsync(string bankName, Action<bool> onComplete = null, bool loadSampleData = false)
         {

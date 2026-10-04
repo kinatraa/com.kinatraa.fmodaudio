@@ -31,15 +31,15 @@ namespace kinatraa.fmodaudio.Editor
         private SoundCue previewCue;
 
         /// <summary>Opens the window.</summary>
-        [MenuItem("Tools/kinatraa/FMOD Audio/Cue Library", priority = 20)]
+        [MenuItem(EditorUi.MenuRoot + "Cue Library", priority = 20)]
         public static void Open() => Open(null);
 
         /// <summary>Opens the window on a library.</summary>
         public static void Open(SoundCueLibrary target)
         {
             CueLibraryWindow window = GetWindow<CueLibraryWindow>();
-            window.titleContent = new GUIContent("Cue Library");
-            window.minSize = new Vector2(640, 360);
+            window.titleContent = new GUIContent(EditorUi.CueLibraryTitle);
+            window.minSize = new Vector2(680, 360);
             if (target != null) window.SetLibrary(target);
             else if (window.library == null) window.SetLibrary(EditorCues.FindResourcesConfig()?.Libraries.FirstOrDefault(l => l != null) ?? EditorCues.FindAllLibraries().FirstOrDefault());
             window.Show();
@@ -54,7 +54,27 @@ namespace kinatraa.fmodaudio.Editor
             expanded = null;
         }
 
-        private void OnDisable() => StopPreview();
+        private void OnEnable()
+        {
+            titleContent = new GUIContent(EditorUi.CueLibraryTitle);
+            Undo.undoRedoPerformed += OnUndoRedo;
+        }
+
+        private void OnDisable()
+        {
+            Undo.undoRedoPerformed -= OnUndoRedo;
+            StopPreview();
+        }
+
+        // Undo re-creates the cue objects, so references held in the selection would point at stale copies.
+        private void OnUndoRedo()
+        {
+            selected.Clear();
+            expanded = null;
+            serialized?.Update();
+            EditorCues.Invalidate();
+            Repaint();
+        }
 
         private void OnGUI()
         {
@@ -98,8 +118,24 @@ namespace kinatraa.fmodaudio.Editor
                     menu.ShowAsContext();
                 }
                 if (GUILayout.Button("New Library", EditorStyles.toolbarButton, GUILayout.Width(90))) CreateLibrary();
+                using (new EditorGUI.DisabledScope(library == null))
+                {
+                    if (GUILayout.Button("Ping", EditorStyles.toolbarButton, GUILayout.Width(40))) EditorGUIUtility.PingObject(library);
+                }
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("Generate SoundIds.cs", EditorStyles.toolbarButton)) SoundIdsGenerator.Generate();
+                if (GUILayout.Button("Docs", EditorStyles.toolbarButton)) EditorUi.OpenDocs("GettingStarted.md#4-create-cues");
+            }
+            if (library == null) return;
+            SoundSystemConfig config = EditorCues.FindResourcesConfig();
+            if (config != null && !config.Libraries.Contains(library))
+            {
+                using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                {
+                    GUILayout.Label("This library is not in the config's Libraries, so its cues are unknown at runtime unless you call Sound.RegisterLibrary.",
+                        EditorUi.WrapMini);
+                    if (GUILayout.Button("Add to config", GUILayout.Width(100))) LibraryRegistration.AddToConfig(config, library);
+                }
             }
         }
 
@@ -120,6 +156,11 @@ namespace kinatraa.fmodaudio.Editor
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 search = EditorGUILayout.TextField(search, EditorStyles.toolbarSearchField, GUILayout.MinWidth(160));
+                if (search.Length > 0 && GUILayout.Button("Clear", EditorStyles.toolbarButton, GUILayout.Width(42)))
+                {
+                    search = string.Empty;
+                    GUI.FocusControl(null);
+                }
                 List<string> channels = new List<string> { "All channels" };
                 channels.AddRange(EditorCues.ChannelNames());
                 int ci = Mathf.Max(0, channels.IndexOf(channelFilter));
@@ -178,17 +219,40 @@ namespace kinatraa.fmodaudio.Editor
         private void DrawValidation()
         {
             HashSet<string> dupes = EditorCues.DuplicateIds(EditorCues.FindAllLibraries().Union(new[] { library }));
+            int total = library.Cues.Count(c => c != null);
+            int shown = library.Cues.Count(c => c != null && Matches(c));
             int invalid = library.Cues.Count(c => c != null && Problem(c, dupes) != null);
-            if (invalid > 0) EditorGUILayout.HelpBox($"{invalid} cue(s) need attention (marked in red).", MessageType.Warning);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(shown == total ? $"{total} cue(s)" : $"Showing {shown} of {total} cue(s)", EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                if (invalid > 0) EditorUi.ColoredLabel($"{invalid} need attention", EditorUi.ErrorColor, EditorStyles.miniBoldLabel);
+                else if (total > 0) EditorUi.ColoredLabel("All cues valid", EditorUi.OkColor, EditorStyles.miniBoldLabel);
+            }
         }
 
-        private static string Problem(SoundCue cue, HashSet<string> dupes)
+        /// <summary>Short problem label for the status column, or null when the cue is valid.</summary>
+        internal static string Problem(SoundCue cue, HashSet<string> dupes)
         {
             if (string.IsNullOrEmpty(cue.Id)) return "empty id";
             if (dupes.Contains(cue.Id)) return "duplicate id";
             if (cue.Event.IsNull) return "no event";
             if (EventManager.EventFromGUID(cue.Event.Guid) == null) return "event not found";
+            if (!cue.Channel.IsValid) return "no channel";
             return null;
+        }
+
+        private static string ProblemTooltip(string problem)
+        {
+            switch (problem)
+            {
+                case "empty id": return "Give the cue an id; Sound.Play uses it.";
+                case "duplicate id": return "Another cue (in this or another library) uses the same id; the last registered library wins at runtime.";
+                case "no event": return "Assign an FMOD event (expand the row).";
+                case "event not found": return "The event is not in FMOD's cache: deleted in FMOD Studio, or banks not built / refreshed.";
+                case "no channel": return "Pick a channel so StopChannel, the policy hook and the debugger can group this cue.";
+                default: return "Valid.";
+            }
         }
 
         private void DrawBulkBar()
@@ -242,12 +306,13 @@ namespace kinatraa.fmodaudio.Editor
             SerializedProperty cues = serialized.FindProperty(nameof(SoundCueLibrary.Cues));
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                bool all = library.Cues.Count > 0 && selected.Count == library.Cues.Count;
-                bool toggled = GUILayout.Toggle(all, GUIContent.none, GUILayout.Width(16));
+                List<SoundCue> visible = library.Cues.Where(c => c != null && Matches(c)).ToList();
+                bool all = visible.Count > 0 && visible.All(selected.Contains);
+                bool toggled = GUILayout.Toggle(all, new GUIContent(string.Empty, "Select all visible cues"), GUILayout.Width(16));
                 if (toggled != all)
                 {
                     selected.Clear();
-                    if (toggled) selected.UnionWith(library.Cues.Where(c => c != null));
+                    if (toggled) selected.UnionWith(visible);
                 }
                 GUILayout.Label("Id", GUILayout.Width(170));
                 GUILayout.Label("Event", GUILayout.MinWidth(180));
@@ -274,10 +339,12 @@ namespace kinatraa.fmodaudio.Editor
                     string path = cue.Event.IsNull ? "(none)" : EventManager.EventFromGUID(cue.Event.Guid)?.Path ?? cue.Event.Path;
                     GUILayout.Label(new GUIContent(path, path), GUILayout.MinWidth(180));
                     GUILayout.Label(cue.Channel.Name, GUILayout.Width(70));
-                    Color old = GUI.color;
-                    if (problem != null) GUI.color = new Color(1f, 0.5f, 0.45f);
-                    GUILayout.Label(problem ?? (cue.AutoRelease ? "ok" : "ok (held)"), GUILayout.Width(110));
-                    GUI.color = old;
+                    Color old = GUI.contentColor;
+                    if (problem != null) GUI.contentColor = EditorUi.ErrorColor;
+                    GUILayout.Label(new GUIContent(problem ?? (cue.AutoRelease ? "ok" : "ok (held)"),
+                        problem != null ? ProblemTooltip(problem) : cue.AutoRelease ? "Auto release: one-shot, FMOD frees it when it ends." : "Held: the handle owns the instance (loops)."),
+                        GUILayout.Width(110));
+                    GUI.contentColor = old;
                     bool playing = previewCue == cue && preview.isValid();
                     using (new EditorGUI.DisabledScope(cue.Event.IsNull))
                     {
@@ -287,7 +354,8 @@ namespace kinatraa.fmodaudio.Editor
                             else StartPreview(cue);
                         }
                     }
-                    if (GUILayout.Button(expanded == cue ? "▴" : "▾", EditorStyles.miniButton, GUILayout.Width(24))) expanded = expanded == cue ? null : cue;
+                    if (GUILayout.Button(new GUIContent(expanded == cue ? "▴" : "▾", "Edit all fields"), EditorStyles.miniButton, GUILayout.Width(24))) expanded = expanded == cue ? null : cue;
+                    if (GUILayout.Button(new GUIContent("⋮", "More actions"), EditorStyles.miniButton, GUILayout.Width(20))) ShowRowMenu(cue);
                 }
                 if (expanded == cue)
                 {
@@ -306,6 +374,27 @@ namespace kinatraa.fmodaudio.Editor
                 }
             }
             EditorGUILayout.EndScrollView();
+        }
+
+        private void ShowRowMenu(SoundCue cue)
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Copy id"), false, () => GUIUtility.systemCopyBuffer = cue.Id ?? string.Empty);
+            menu.AddItem(new GUIContent("Copy Sound.Play call"), false, () => GUIUtility.systemCopyBuffer = $"Sound.Play(\"{cue.Id}\");");
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Duplicate"), false, () =>
+            {
+                selected.Clear();
+                selected.Add(cue);
+                DuplicateSelected();
+            });
+            menu.AddItem(new GUIContent("Delete"), false, () =>
+            {
+                selected.Clear();
+                selected.Add(cue);
+                DeleteSelected();
+            });
+            menu.ShowAsContext();
         }
 
         private bool Matches(SoundCue cue)

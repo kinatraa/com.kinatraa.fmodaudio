@@ -3,6 +3,52 @@
 All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-04
+
+### Added
+- **VCA channels**: a channel's *Bus Path* may be `vca:/<Name>`; volume and mute (volume 0) go to the VCA. The wizard checks
+  VCAs exist in the Studio project.
+- `SoundHandle.SetPosition(Vector3)`, `AttachTo(Transform)`, `TimelinePosition` (get/set in ms, applied on start for queued
+  sounds) and `TryGetParameter(name, out value)`.
+- `Sound.ResetVolumes(bool save = true)` (configured defaults, unmuted) and `Sound.SaveSettings()`.
+- `IFlushableSoundSettingsStore`: stores that buffer writes are flushed on `SaveSettings`, focus loss, app suspension, quit and
+  shutdown. `PlayerPrefsSoundSettingsStore` implements it (`PlayerPrefs.Save` only when something changed).
+- `SoundBankLoader.LoadedBanks`; a custom inspector with validation and Play Mode Load/Unload.
+- Setup Wizard: toolbar (Re-scan, Fix All with count, *Only problems* filter, links to the Cue Library, Runtime Debugger and docs),
+  status summary, *Details* only where a check has extra controls.
+- Cue Library: *Add to config* banner for libraries the runtime would not register, row menu (copy id, copy `Sound.Play` call,
+  duplicate, delete), clear-search button, "showing N of M" count, tooltips explaining each problem, *no channel* problem,
+  select-all applies to the visible (filtered) cues only.
+- Runtime Debugger: toolbar, sound filter, per-channel *Stop*, *Reset volumes* / *Save settings*, push and release config
+  snapshots.
+- SoundIds generator: namespace / class name validation, output must be inside `Assets/`, optional *Auto-generate* when a cue
+  library is saved, cue count preview and *Ping file* in Project Settings.
+- Package tests: Edit Mode tests (`Tests/Editor`) and Play Mode tests (`Tests/Runtime`, using the Minimal Studio Project sample).
+- Samples: reset/save buttons in `VolumeSliders`, a moving one-shot in `SfxExample`.
+
+### Fixed
+- WebGL / Android OBB: a bank that failed to load asynchronously blocked every queued play forever (FMOD for Unity 2.03.15 never
+  clears its loading counter after a failed asynchronous load). Asynchronous loads now time out after 30 s and FMOD's counter is
+  ignored after the same delay, with a warning.
+- `LoadBankAsync` callbacks still pending at `Sound.Shutdown()` are now invoked with `false` instead of never.
+- `OnMusicChanged(null)` is now raised whenever the music slot ends (`StopChannel(Music)`, `MusicHandle.Stop()`, a non-looping
+  track finishing, a queued track dropped), not only from `StopMusic` / `StopAll`.
+- `SoundBankLoader` with *Unload On = OnDisable* now reloads its banks when the object is enabled again; `Load()` while the
+  system is not initialized no longer marks the loader as loaded.
+- Volumes and mutes set before `Initialize` (Auto Initialize off) are no longer overwritten when the config's channels load.
+- Exceptions thrown by game code (policy, event handlers, bank provider, settings store, `LoadBankAsync` callbacks) are logged
+  and no longer escape from `Sound` calls or stop the update.
+- "Log once" paths no longer allocate when hit repeatedly (e.g. `SetParameter` with a missing parameter every frame).
+- The listener fix only removes *enabled* Unity AudioListeners.
+- The Runtime Debugger and the `SoundEmitter` inspector no longer repaint in a tight loop.
+- The wizard reports an unreadable FMOD version as unknown instead of unsupported.
+- Samples: `SceneBankExample` no longer unloads a bank it does not hold.
+
+### Changed
+- Window titles match their menu items (*Setup Wizard*, *Cue Library*, *Runtime Debugger*).
+- The config inspector and the wizard validate channel paths (`bus:/...` or `vca:/...`) and mention cue libraries that are not
+  registered in the config.
+
 ## [1.0.0] - 2026-10-02
 
 ### Added
@@ -26,4 +72,5 @@ All notable changes to this package are documented here. The format follows
   `SoundIds.cs` generator (Project Settings > kinatraa FMOD Audio), Play Mode runtime debugger.
 - Samples: Basic Usage, Minimal Studio Project (instructions plus an `fmodstudiocl` script and an audio generator script).
 
+[1.1.0]: https://github.com/kinatraa/com.kinatraa.fmodaudio/releases/tag/1.1.0
 [1.0.0]: https://github.com/kinatraa/com.kinatraa.fmodaudio/releases/tag/1.0.0

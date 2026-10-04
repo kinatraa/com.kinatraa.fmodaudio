@@ -10,8 +10,11 @@ namespace kinatraa.fmodaudio
 
         private void OnApplicationPause(bool pauseStatus)
         {
-            if (!pauseStatus) Sound.HandleApplicationResumed();
+            if (pauseStatus) Sound.HandleApplicationSuspended();
+            else Sound.HandleApplicationResumed();
         }
+
+        private void OnApplicationQuit() => Sound.HandleApplicationSuspended();
 
         private void OnDestroy() => Sound.HandleRuntimeDestroyed(gameObject);
     }

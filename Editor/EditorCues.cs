@@ -74,6 +74,22 @@ namespace kinatraa.fmodaudio.Editor
                 .Select(c => c.Id).Distinct().OrderBy(i => i, StringComparer.Ordinal).ToList();
         }
 
+        /// <summary>Finds a cue by id in the project's libraries (first match in path order).</summary>
+        internal static bool TryFindCue(string id, out SoundCue cue, out SoundCueLibrary library)
+        {
+            foreach (SoundCueLibrary l in FindAllLibraries())
+            {
+                SoundCue c = l.Find(id);
+                if (c == null) continue;
+                cue = c;
+                library = l;
+                return true;
+            }
+            cue = null;
+            library = null;
+            return false;
+        }
+
         /// <summary>Ids that appear more than once across all libraries.</summary>
         internal static HashSet<string> DuplicateIds(IEnumerable<SoundCueLibrary> libraries)
         {
@@ -142,6 +158,23 @@ namespace kinatraa.fmodaudio.Editor
                 if (folder.Equals("Ambience", StringComparison.OrdinalIgnoreCase) || folder.Equals("Ambiance", StringComparison.OrdinalIgnoreCase)) return "Ambient";
             }
             return "SFX";
+        }
+    }
+}
+
+namespace kinatraa.fmodaudio.Editor
+{
+    /// <summary>Adds cue libraries to the config so the runtime registers them at startup.</summary>
+    internal static class LibraryRegistration
+    {
+        internal static void AddToConfig(SoundSystemConfig config, SoundCueLibrary library)
+        {
+            if (config == null || library == null || config.Libraries.Contains(library)) return;
+            UnityEditor.Undo.RecordObject(config, "Add cue library to config");
+            config.Libraries.Add(library);
+            UnityEditor.EditorUtility.SetDirty(config);
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEngine.Debug.Log($"[kinatraa.fmodaudio] Added '{UnityEditor.AssetDatabase.GetAssetPath(library)}' to the config's Libraries.");
         }
     }
 }

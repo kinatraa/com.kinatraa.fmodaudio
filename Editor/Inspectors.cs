@@ -113,16 +113,24 @@ namespace kinatraa.fmodaudio.Editor
         {
             var library = (SoundCueLibrary)target;
             if (GUILayout.Button("Open in Cue Library window", GUILayout.Height(24))) CueLibraryWindow.Open(library);
+            SoundSystemConfig config = EditorCues.FindResourcesConfig();
+            if (config != null && !config.Libraries.Contains(library))
+            {
+                EditorGUILayout.HelpBox("Not in the config's Libraries: its cues are unknown at runtime unless registered with Sound.RegisterLibrary.", MessageType.Info);
+                if (GUILayout.Button("Add to config")) LibraryRegistration.AddToConfig(config, library);
+            }
             HashSet<string> dupes = EditorCues.DuplicateIds(EditorCues.FindAllLibraries());
             int empty = library.Cues.Count(c => c == null || string.IsNullOrEmpty(c.Id));
             int noEvent = library.Cues.Count(c => c != null && c.Event.IsNull);
             int notFound = library.Cues.Count(c => c != null && !c.Event.IsNull && EventManager.EventFromGUID(c.Event.Guid) == null);
+            int noChannel = library.Cues.Count(c => c != null && !c.Channel.IsValid);
             List<string> mine = library.Cues.Where(c => c != null && dupes.Contains(c.Id)).Select(c => c.Id).Distinct().ToList();
             EditorGUILayout.LabelField($"{library.Cues.Count} cue(s)", EditorStyles.miniBoldLabel);
             if (empty > 0) EditorGUILayout.HelpBox($"{empty} cue(s) have an empty id.", MessageType.Error);
             if (mine.Count > 0) EditorGUILayout.HelpBox("Duplicate ids (across all libraries): " + string.Join(", ", mine), MessageType.Error);
             if (noEvent > 0) EditorGUILayout.HelpBox($"{noEvent} cue(s) have no FMOD event assigned.", MessageType.Warning);
             if (notFound > 0) EditorGUILayout.HelpBox($"{notFound} cue(s) reference events not in FMOD's cache (deleted in Studio or banks not built).", MessageType.Warning);
+            if (noChannel > 0) EditorGUILayout.HelpBox($"{noChannel} cue(s) have no channel.", MessageType.Warning);
             EditorGUILayout.Space();
             DrawDefaultInspector();
         }
@@ -144,6 +152,13 @@ namespace kinatraa.fmodaudio.Editor
             List<string> dupes = names.Where(n => !string.IsNullOrEmpty(n)).GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
             if (dupes.Count > 0) EditorGUILayout.HelpBox("Duplicate channel names: " + string.Join(", ", dupes), MessageType.Error);
             if (!names.Contains("Master")) EditorGUILayout.HelpBox("No 'Master' channel (bus:/); master volume cannot be set through settings.", MessageType.Warning);
+            List<string> badPaths = config.Channels
+                .Where(c => c != null && !string.IsNullOrEmpty(c.BusPath) && !c.BusPath.StartsWith("bus:/", StringComparison.Ordinal) && !c.BusPath.StartsWith("vca:/", StringComparison.Ordinal))
+                .Select(c => c.Name).ToList();
+            if (badPaths.Count > 0)
+            {
+                EditorGUILayout.HelpBox("Bus Path must start with bus:/ (a mixer bus) or vca:/ (a VCA): " + string.Join(", ", badPaths), MessageType.Error);
+            }
             if (config.Libraries.Any(l => l == null)) EditorGUILayout.HelpBox("Libraries contains empty entries.", MessageType.Warning);
             if (!config.Banks.Contains("Master") || !config.Banks.Contains("Master.strings"))
             {
@@ -171,12 +186,29 @@ namespace kinatraa.fmodaudio.Editor
     [CanEditMultipleObjects]
     internal sealed class SoundEmitterEditor : UnityEditor.Editor
     {
+        public override bool RequiresConstantRepaint() => EditorApplication.isPlaying;
+
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
             var emitter = (SoundEmitter)target;
-            if (string.IsNullOrEmpty(emitter.CueId)) EditorGUILayout.HelpBox("No cue id set.", MessageType.Warning);
-            else if (!EditorCues.AllCueIds().Contains(emitter.CueId)) EditorGUILayout.HelpBox($"Cue id '{emitter.CueId}' is not in any SoundCueLibrary.", MessageType.Error);
+            if (string.IsNullOrEmpty(emitter.CueId))
+            {
+                EditorGUILayout.HelpBox("No cue id set.", MessageType.Warning);
+            }
+            else if (!EditorCues.TryFindCue(emitter.CueId, out SoundCue cue, out SoundCueLibrary library))
+            {
+                EditorGUILayout.HelpBox($"Cue id '{emitter.CueId}' is not in any SoundCueLibrary.", MessageType.Error);
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    string path = cue.Event.IsNull ? "(no event)" : EventManager.EventFromGUID(cue.Event.Guid)?.Path ?? cue.Event.Path;
+                    EditorGUILayout.LabelField($"{path}  |  {cue.Channel.Name}  |  {library.name}", EditorStyles.miniLabel);
+                    if (GUILayout.Button("Edit cue", EditorStyles.miniButton, GUILayout.Width(60))) CueLibraryWindow.Open(library);
+                }
+            }
 
             if (emitter.PlayOn == SoundEmitterTrigger.TriggerEnter)
             {
@@ -204,7 +236,42 @@ namespace kinatraa.fmodaudio.Editor
                 if (GUILayout.Button("Stop")) emitter.Stop();
                 GUILayout.Label(emitter.Handle.IsValid ? emitter.Handle.State.ToString() : "-", GUILayout.Width(90));
             }
-            Repaint();
+        }
+    }
+
+    /// <summary>Inspector for <see cref="SoundBankLoader"/>: validation and Play Mode load state.</summary>
+    [CustomEditor(typeof(SoundBankLoader))]
+    [CanEditMultipleObjects]
+    internal sealed class SoundBankLoaderEditor : UnityEditor.Editor
+    {
+        public override bool RequiresConstantRepaint() => EditorApplication.isPlaying;
+
+        public override void OnInspectorGUI()
+        {
+            DrawDefaultInspector();
+            var loader = (SoundBankLoader)target;
+            if (loader.Banks.Count == 0 || loader.Banks.Any(string.IsNullOrEmpty)) EditorGUILayout.HelpBox("Add bank names (empty entries are skipped).", MessageType.Warning);
+            SoundSystemConfig config = EditorCues.FindResourcesConfig();
+            if (config != null)
+            {
+                List<string> always = loader.Banks.Where(b => !string.IsNullOrEmpty(b) && config.Banks.Contains(b)).ToList();
+                if (always.Count > 0) EditorGUILayout.HelpBox($"Already always loaded by the config: {string.Join(", ", always)}.", MessageType.Info);
+            }
+            if (loader.LoadOn == SoundBankLoadTiming.Manual && loader.UnloadOn != SoundBankUnloadTiming.Manual)
+            {
+                EditorGUILayout.HelpBox("Load is manual: call Load() from code (banks unload automatically as configured).", MessageType.None);
+            }
+            if (!EditorApplication.isPlaying) return;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(loader.IsLoaded ? "Loaded: " + string.Join(", ", loader.LoadedBanks) : "Not loaded", EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(loader.IsLoaded ? "Unload" : "Load", GUILayout.Width(70)))
+                {
+                    if (loader.IsLoaded) loader.Unload();
+                    else loader.Load();
+                }
+            }
         }
     }
 }

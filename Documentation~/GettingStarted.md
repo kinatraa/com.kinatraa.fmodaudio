@@ -10,7 +10,7 @@
 
 ## 2. Install the package
 
-- Package Manager > **+** > *Add package from git URL*: `https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.0.0`
+- Package Manager > **+** > *Add package from git URL*: `https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.1.0`
 - or `git submodule add https://github.com/kinatraa/com.kinatraa.fmodaudio.git Packages/com.kinatraa.fmodaudio`
 
 On the first compile the bootstrap editor assembly detects FMOD and adds the `KINATRAA_FMOD` scripting define to every
@@ -29,8 +29,13 @@ See [Wizard.md](Wizard.md).
 **Tools > kinatraa > FMOD Audio > Cue Library**:
 - **+ From FMOD event** or drag events from FMOD's Event Browser onto the drop area. Each event becomes a cue with a snake_case id,
   a channel guessed from its folder, and auto-release set for one-shots.
-- Edit cooldowns, max instances, default parameters and tags; preview with the play button.
-- Optionally **Generate SoundIds.cs** to get constants (`Sound.Play(SoundIds.UiClick)`).
+- Edit cooldowns, max instances, default parameters and tags (expand a row with ▾); preview with the play button. The **⋮** menu
+  copies the id or a ready `Sound.Play("...")` call, duplicates or deletes the cue.
+- The status column flags cues that need attention (empty or duplicate id, no event, event not built, no channel); hover it for the fix.
+- A library that is not in the config's *Libraries* shows an **Add to config** banner: its cues are unknown at runtime until
+  it is registered (or registered from code with `Sound.RegisterLibrary`).
+- Optionally **Generate SoundIds.cs** to get constants (`Sound.Play(SoundIds.UiClick)`); turn on *Auto-generate* in
+  Project Settings > kinatraa FMOD Audio to keep the file in sync whenever a library is saved.
 
 ## 5. Play
 
@@ -64,7 +69,13 @@ musicSlider.value = Sound.GetBusVolume(SoundChannel.Music);
 musicSlider.onValueChanged.AddListener(v => Sound.SetBusVolume(SoundChannel.Music, v)); // saved through the store
 ```
 
+```csharp
+resetButton.onClick.AddListener(() => Sound.ResetVolumes());   // configured defaults, unmuted, saved
+closeButton.onClick.AddListener(Sound.SaveSettings);            // flush to disk now (also automatic on focus loss / quit)
+```
+
 By default volumes persist with PlayerPrefs. To use your own save system see [SettingsIntegration.md](SettingsIntegration.md).
+To drive a VCA instead of a bus, set the channel's *Bus Path* to `vca:/<Name>` in the config.
 
 ## 7. Banks
 
@@ -72,6 +83,12 @@ By default volumes persist with PlayerPrefs. To use your own save system see [Se
 - Per-scene banks: config > *Scene Banks*, a `SoundBankLoader` component, or your own `ISoundBankProvider`.
 - If you use per-scene banks, set FMOD Settings > Initialization > *Load Banks* to **None** (or *Specified*);
   with *All*, FMOD keeps every bank loaded and scene banks never unload. The wizard warns about this.
+
+## 8. Debug
+
+**Tools > kinatraa > FMOD Audio > Runtime Debugger** (Play Mode): active sounds with their parameters (filterable), the music
+slot, channel volumes/mutes with per-channel *Stop*, global parameters, snapshots (push/release config snapshots), and the
+banks loaded through `Sound` versus everything FMOD has loaded.
 
 ## Threading
 

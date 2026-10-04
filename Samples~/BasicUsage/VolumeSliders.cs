@@ -29,6 +29,11 @@ namespace kinatraa.fmodaudio.Samples
                 if (muted != Sound.IsBusMuted(channel)) Sound.SetBusMuted(channel, muted);
                 GUILayout.EndHorizontal();
             }
+            GUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Reset to defaults")) Sound.ResetVolumes();
+            if (GUILayout.Button("Save")) Sound.SaveSettings();   // e.g. when the settings menu closes
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
     }

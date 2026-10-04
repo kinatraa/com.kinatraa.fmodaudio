@@ -28,7 +28,11 @@ namespace kinatraa.fmodaudio
         Manual,
     }
 
-    /// <summary>Loads banks for the lifetime of this object (put it in a scene for scene lifetime). Reference counted.</summary>
+    /// <summary>
+    /// Loads banks for the lifetime of this object (put it in a scene for scene lifetime). Reference counted, so several
+    /// loaders (or <see cref="Sound.LoadBank"/> calls) can share a bank. With <see cref="UnloadOn"/> = OnDisable the banks
+    /// are loaded again when the object is re-enabled.
+    /// </summary>
     [AddComponentMenu("kinatraa/FMOD Audio/Sound Bank Loader")]
     public class SoundBankLoader : MonoBehaviour
     {
@@ -42,14 +46,26 @@ namespace kinatraa.fmodaudio
         public bool LoadSampleData;
 
         private readonly List<string> loaded = new List<string>();
+        private bool reloadOnEnable;
 
-        /// <summary>True between <see cref="Load"/> and <see cref="Unload"/>.</summary>
+        /// <summary>True between a successful <see cref="Load"/> and <see cref="Unload"/>.</summary>
         public bool IsLoaded { get; private set; }
 
-        /// <summary>Loads the banks (no-op if already loaded by this component).</summary>
+        /// <summary>The banks this component currently holds a reference to (empty when not loaded).</summary>
+        public IReadOnlyList<string> LoadedBanks => loaded;
+
+        /// <summary>
+        /// Loads the banks (no-op if already loaded by this component). Does nothing, with a warning, while the sound
+        /// system is not initialized, so a later call can still load them.
+        /// </summary>
         public void Load()
         {
             if (IsLoaded) return;
+            if (!Sound.IsInitialized)
+            {
+                SoundLog.Warning($"SoundBankLoader on '{name}': the sound system is not initialized, banks were not loaded.");
+                return;
+            }
             IsLoaded = true;
             foreach (string bank in Banks)
             {
@@ -73,7 +89,8 @@ namespace kinatraa.fmodaudio
 
         private void OnEnable()
         {
-            if (LoadOn == SoundBankLoadTiming.OnEnable) Load();
+            if (LoadOn == SoundBankLoadTiming.OnEnable || reloadOnEnable) Load();
+            reloadOnEnable = false;
         }
 
         private void Start()
@@ -83,7 +100,10 @@ namespace kinatraa.fmodaudio
 
         private void OnDisable()
         {
-            if (UnloadOn == SoundBankUnloadTiming.OnDisable) Unload();
+            if (UnloadOn != SoundBankUnloadTiming.OnDisable || !IsLoaded) return;
+            Unload();
+            // Awake/Start only run once: reload on the next enable so disable/enable cycles keep the banks loaded.
+            reloadOnEnable = LoadOn == SoundBankLoadTiming.Awake || LoadOn == SoundBankLoadTiming.Start;
         }
 
         private void OnDestroy()

@@ -61,6 +61,8 @@ namespace kinatraa.fmodaudio.Editor
         public virtual void Fix() { }
         /// <summary>When false, "Fix All" skips this check (its Fix button still works).</summary>
         public virtual bool IncludedInFixAll => true;
+        /// <summary>True when <see cref="DrawGUI"/> draws something (the wizard then shows a "Details" foldout).</summary>
+        public virtual bool HasDetails => false;
         /// <summary>Optional extra controls shown under the check in the wizard (IMGUI).</summary>
         public virtual void DrawGUI() { }
 

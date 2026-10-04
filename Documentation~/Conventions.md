@@ -23,6 +23,13 @@ with FMOD Studio; commit `Build/` instead if that is not possible.
 Route every event's master track output to one of these buses. Nested buses work too (e.g. `bus:/SFX/Weapons`); add a
 channel with that bus path in the config to control it from code.
 
+## VCAs (optional)
+
+FMOD recommends VCAs for player-facing volume settings when one setting spans several buses. Point a channel at a VCA by
+setting its *Bus Path* to `vca:/<Name>` (e.g. channel `Music` -> `vca:/Music`). Volume goes to the VCA and mute sets the VCA
+to 0 (VCAs have no mute). `StopChannel` then stops only that channel's tracked sounds, because a VCA cannot stop events.
+Assign VCAs to the Master bank so they are always available.
+
 ## Events
 
 | Path | Notes |

@@ -20,6 +20,11 @@ namespace kinatraa.fmodaudio.Samples
             GUILayout.Label("SFX");
             if (GUILayout.Button("UI click (2D)")) Sound.Play(ClickCue);
             if (GUILayout.Button("Explosion at (0, 0, 10)")) Sound.Play(ExplosionCue, new Vector3(0, 0, 10));
+            if (GUILayout.Button("Explosion, then move it to (10, 0, 0)"))
+            {
+                SoundHandle boom = Sound.Play(ExplosionCue, new Vector3(0, 0, 10));
+                boom.SetPosition(new Vector3(10, 0, 0));   // e.g. follow a projectile you move yourself
+            }
             if (GUILayout.Button("Footstep attached to walker")) Sound.Play(FootstepCue, Walker != null ? Walker : transform);
 
             GUILayout.Label("Looping engine");

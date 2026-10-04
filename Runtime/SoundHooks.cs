@@ -21,8 +21,21 @@ namespace kinatraa.fmodaudio
         void SaveMuted(string key, bool muted);
     }
 
-    /// <summary>Default store: PlayerPrefs with a configurable key prefix.</summary>
-    public sealed class PlayerPrefsSoundSettingsStore : ISoundSettingsStore
+    /// <summary>
+    /// Optional extension of <see cref="ISoundSettingsStore"/> for stores that buffer writes. <see cref="Flush"/> is called by
+    /// <see cref="Sound.SaveSettings"/>, on focus loss, app suspension, quit and shutdown.
+    /// </summary>
+    public interface IFlushableSoundSettingsStore : ISoundSettingsStore
+    {
+        /// <summary>Writes buffered values to persistent storage.</summary>
+        void Flush();
+    }
+
+    /// <summary>
+    /// Default store: PlayerPrefs with a configurable key prefix. Values are written to PlayerPrefs immediately and flushed
+    /// to disk (<c>PlayerPrefs.Save</c>) through <see cref="Flush"/>.
+    /// </summary>
+    public sealed class PlayerPrefsSoundSettingsStore : IFlushableSoundSettingsStore
     {
         /// <summary>Default key prefix.</summary>
         public const string DefaultPrefix = "kinatraa.fmodaudio.";
@@ -59,7 +72,11 @@ namespace kinatraa.fmodaudio
         }
 
         /// <inheritdoc/>
-        public void Save(string key, float value) => PlayerPrefs.SetFloat(VolumeKey(key), value);
+        public void Save(string key, float value)
+        {
+            PlayerPrefs.SetFloat(VolumeKey(key), value);
+            dirty = true;
+        }
 
         /// <inheritdoc/>
         public bool TryLoadMuted(string key, out bool muted)
@@ -70,7 +87,21 @@ namespace kinatraa.fmodaudio
         }
 
         /// <inheritdoc/>
-        public void SaveMuted(string key, bool muted) => PlayerPrefs.SetInt(MuteKey(key), muted ? 1 : 0);
+        public void SaveMuted(string key, bool muted)
+        {
+            PlayerPrefs.SetInt(MuteKey(key), muted ? 1 : 0);
+            dirty = true;
+        }
+
+        private bool dirty;
+
+        /// <summary>Calls <c>PlayerPrefs.Save()</c> if anything changed since the last flush.</summary>
+        public void Flush()
+        {
+            if (!dirty) return;
+            dirty = false;
+            PlayerPrefs.Save();
+        }
     }
 
     /// <summary>Adapter that turns delegates into an <see cref="ISoundSettingsStore"/> (see <see cref="Sound.BindSettings"/>).</summary>

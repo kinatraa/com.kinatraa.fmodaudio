@@ -6,19 +6,25 @@ and a **Fix** button when it can be fixed automatically. **Fix All** runs every 
 - logs exactly what it changed to the Console (`[kinatraa.fmodaudio] Setup: ...`),
 - supports Undo for scene and settings changes (listener, FMOD settings, Project Settings > Audio).
 
+The toolbar has **Re-scan**, **Fix All (n)** (n = items Fix All would fix; disabled when there is nothing to do),
+**Only problems** (hides OK and Info items), shortcuts to the **Cue Library** and **Runtime Debugger**, **Log report**
+(the CI report in the Console) and **Docs**. Under it a summary counts OK / warning / missing items and says
+"Project is set up." when nothing is left. Items with extra controls (pickers, previews, options) have a **Details** foldout.
+The wizard re-scans when it gets focus and when Play Mode starts or stops.
+
 The wizard lives in the bootstrap editor assembly, so it opens even when FMOD is missing. In that case it shows
 "FMOD for Unity not detected" with install instructions and hides the other items.
 
 | # | Check | Fixes automatically | Only reports |
 |---|---|---|---|
-| 1 | FMOD for Unity installed, version (expects 2.03.15) | - | Missing FMOD, FMOD without asmdefs, other versions (download link, no download automation) |
+| 1 | FMOD for Unity installed, version (expects 2.03.15) | - | Missing FMOD, FMOD without asmdefs, other or unreadable versions (download link, no download automation) |
 | 2 | `KINATRAA_FMOD` define for every build target | Adds (or removes when FMOD is gone) | - |
 | 3 | FMOD settings asset exists, Source = Studio project, `.fspro` path | Creates the settings asset through FMOD, links the `.fspro` (auto-detected next to `Assets/`, or Browse) | No `.fspro` found |
-| 4 | Studio conventions: required buses (from the config's channels), optional snapshots, saved by Studio 2.03 | - (never modifies the Studio project) | Missing buses/snapshots with exact FMOD Studio steps; editable channel/snapshot list under Details |
+| 4 | Studio conventions: required buses and VCAs (from the config's channels), optional snapshots, saved by Studio 2.03 | - (never modifies the Studio project) | Missing buses/VCAs/snapshots with exact FMOD Studio steps; editable channel/snapshot list under Details |
 | 5 | Unity built-in audio disabled | Sets Project Settings > Audio > *Disable Unity Audio* (FMOD 2.03.15 has no own switch; it uses the same setting) | Skipped by Fix All when the project has AudioClips/AudioMixers (likely still uses Unity audio) |
-| 6 | One StudioListener on the main camera of the open scenes, no Unity AudioListener | Adds StudioListener, optionally removes AudioListener (Undo) | No MainCamera, several StudioListeners |
+| 6 | One StudioListener on the main camera of the open scenes, no enabled Unity AudioListener | Adds StudioListener, optionally removes enabled AudioListeners (Undo) | No MainCamera, several StudioListeners |
 | 7 | Banks: Master + Master.strings built, platform folder valid, not older than the Studio project, FMOD cache fresh, FMOD post-import staging done | Refreshes FMOD's bank cache | Unbuilt/stale banks (build in FMOD Studio), unknown config banks, *Load Banks = All* with scene banks |
-| 8 | `Resources/kinatraaFmodAudioConfig.asset` | Creates it (default channels -> buses, Pause/Ducking snapshots) plus an empty `Assets/Audio/SoundCues.asset` library | Config issues (empty channels, no libraries, no Master banks) |
+| 8 | `Resources/kinatraaFmodAudioConfig.asset` | Creates it (default channels -> buses, Pause/Ducking snapshots) plus an empty `Assets/Audio/SoundCues.asset` library | Config issues (empty channels, channel paths not starting with `bus:/` or `vca:/`, no libraries, no Master banks); notes cue libraries that are not in the config |
 | 9 | Recommended folders | Creates `Assets/Audio` after confirmation (never moves files) | Suggests `FMODProject/` for the Studio project |
 | 10 | `.gitignore` FMOD Studio entries | Appends `<Studio folder>/Build/`, `.cache/`, `.unsaved/`, `.user/` (preview under Details; user lines are never removed) | No `.gitignore` (nothing created) |
 | 11 | Platform sanity | - | Speaker mode, sample rate, real/virtual voices per platform, live update in editor / release builds |
