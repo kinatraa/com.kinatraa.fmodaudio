@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Samples
+namespace kinatraa.FmodAudio.Samples
 {
     /// <summary>Single music slot: switching tracks, an intensity parameter, pause and a pause snapshot.</summary>
     public class MusicExample : MonoBehaviour

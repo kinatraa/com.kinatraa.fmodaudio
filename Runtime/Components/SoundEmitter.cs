@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>When a <see cref="SoundEmitter"/> plays automatically.</summary>
     public enum SoundEmitterTrigger

@@ -1,10 +1,10 @@
 {
-    "name": "kinatraa.fmodaudio.Tests.Editor",
-    "rootNamespace": "kinatraa.fmodaudio.Tests",
+    "name": "kinatraa.FmodAudio.Tests.Editor",
+    "rootNamespace": "kinatraa.FmodAudio.Tests",
     "references": [
-        "kinatraa.fmodaudio",
-        "kinatraa.fmodaudio.Editor",
-        "kinatraa.fmodaudio.bootstrap.Editor",
+        "kinatraa.FmodAudio",
+        "kinatraa.FmodAudio.Editor",
+        "kinatraa.FmodAudio.Bootstrap.Editor",
         "FMODUnity",
         "FMODUnityEditor",
         "UnityEngine.TestRunner",

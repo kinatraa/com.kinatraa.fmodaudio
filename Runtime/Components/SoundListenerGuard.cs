@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// Ensures an FMOD StudioListener exists (adds one to this object if none is active), warns when more than one

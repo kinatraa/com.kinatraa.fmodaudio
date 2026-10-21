@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// A list of <see cref="SoundCue"/>s. Several libraries can be registered at once (for example a core library

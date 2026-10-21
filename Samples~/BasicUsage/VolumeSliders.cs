@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Samples
+namespace kinatraa.FmodAudio.Samples
 {
     /// <summary>Settings-menu style volume sliders and mute toggles bound to the configured channels/buses.</summary>
     public class VolumeSliders : MonoBehaviour

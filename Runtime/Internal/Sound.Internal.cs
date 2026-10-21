@@ -5,7 +5,7 @@ using FMODUnity;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     public static partial class Sound
     {

@@ -59,7 +59,7 @@ menu closes). Mobile apps killed while in the foreground lose only the changes s
 using System;
 using System.Collections.Generic;
 using System.IO;
-using kinatraa.fmodaudio;
+using kinatraa.FmodAudio;
 using UnityEngine;
 
 public sealed class JsonAudioSettingsStore : ISoundSettingsStore
@@ -128,7 +128,7 @@ Useful for prototypes, or as the in-memory model behind your own save code.
 ```csharp
 using System;
 using System.Collections.Generic;
-using kinatraa.fmodaudio;
+using kinatraa.FmodAudio;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "Game/Audio Settings")]

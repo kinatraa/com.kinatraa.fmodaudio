@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// Where channel volumes and mutes are persisted. Plug your game's save system in with

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Samples
+namespace kinatraa.FmodAudio.Samples
 {
     /// <summary>Add to a scene to use the JSON store instead of PlayerPrefs. Volumes reload immediately.</summary>
     public class JsonFileSettingsInstaller : MonoBehaviour

@@ -7,7 +7,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace kinatraa.fmodaudio.Tests
+namespace kinatraa.FmodAudio.Tests
 {
     /// <summary>
     /// Play Mode tests of the runtime API. They need the banks and cues of the "Minimal Studio Project" sample

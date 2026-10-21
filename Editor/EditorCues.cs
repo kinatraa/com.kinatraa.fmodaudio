@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using UnityEditor;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Editor lookups for configs, libraries, channels and cue ids.</summary>
     internal static class EditorCues
@@ -162,7 +162,7 @@ namespace kinatraa.fmodaudio.Editor
     }
 }
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Adds cue libraries to the config so the runtime registers them at startup.</summary>
     internal static class LibraryRegistration

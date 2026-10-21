@@ -15,7 +15,7 @@ assembly (which never references FMOD) loads and removes the define, and the nex
   Project Settings > Player > Scripting Define Symbols.
 
 **CS0012: "The type 'EventReference' is defined in an assembly that is not referenced".**
-Your script lives in an asmdef: add `FMODUnity` next to `kinatraa.fmodaudio` in its references.
+Your script lives in an asmdef: add `FMODUnity` next to `kinatraa.FmodAudio` in its references.
 
 **Nothing plays, "Unknown cue id".**
 The cue's library is not registered: use **Add to config** in the Cue Library window (or the library's inspector), add it

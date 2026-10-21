@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace kinatraa.fmodaudio.Samples
+namespace kinatraa.FmodAudio.Samples
 {
     /// <summary>
     /// Per-scene banks driven by code: scenes named "Level*" get a bank of the same name (e.g. Level1 -> Level1.bank).

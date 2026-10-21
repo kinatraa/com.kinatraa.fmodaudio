@@ -1,6 +1,6 @@
 # API reference
 
-Namespace `kinatraa.fmodaudio` (runtime) and `kinatraa.fmodaudio.Editor` (editor). Every public type and member also has
+Namespace `kinatraa.FmodAudio` (runtime) and `kinatraa.FmodAudio.Editor` (editor). Every public type and member also has
 XML documentation in the source. **Main thread only.** Nothing throws on missing data: it logs once and returns an invalid
 handle / default value. Exceptions thrown by your own code that `Sound` calls (policy, event handlers, bank provider,
 settings store, `LoadBankAsync` callbacks) are logged as errors and never escape from `Sound` calls.
@@ -116,7 +116,7 @@ call is a safe no-op even if the slot is reused.
 | `SoundBankLoader` | `Banks` (FMOD bank picker), `LoadOn`, `UnloadOn`, `LoadSampleData`, `Load()`, `Unload()`, `IsLoaded`, `LoadedBanks`. With *Unload On = OnDisable* the banks load again when the object is re-enabled. `Load()` does nothing (warning) while the system is not initialized. |
 | `SoundListenerGuard` | `AddListenerIfMissing`, `DisableUnityAudioListeners`, `Check()` |
 
-## Editor (`kinatraa.fmodaudio.Editor`)
+## Editor (`kinatraa.FmodAudio.Editor`)
 | Type | Purpose |
 |---|---|
 | `SoundSetupWizardWindow` | `Open()`, `FixAllChecks()` |

@@ -38,7 +38,7 @@ message summarizes the state and links to the wizard.
 ## CI / batch mode
 
 ```
-Unity -batchmode -quit -projectPath <project> -executeMethod kinatraa.fmodaudio.Editor.SetupValidator.RunAndExit
+Unity -batchmode -quit -projectPath <project> -executeMethod kinatraa.FmodAudio.Editor.SetupValidator.RunAndExit
 ```
 
 Exit code 0 when nothing is *Missing* (warnings do not fail), 1 otherwise; the report is in the log. From your own

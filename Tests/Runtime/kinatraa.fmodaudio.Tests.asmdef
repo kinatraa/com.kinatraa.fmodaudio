@@ -1,8 +1,8 @@
 {
-    "name": "kinatraa.fmodaudio.Tests",
-    "rootNamespace": "kinatraa.fmodaudio.Tests",
+    "name": "kinatraa.FmodAudio.Tests",
+    "rootNamespace": "kinatraa.FmodAudio.Tests",
     "references": [
-        "kinatraa.fmodaudio",
+        "kinatraa.FmodAudio",
         "FMODUnity",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

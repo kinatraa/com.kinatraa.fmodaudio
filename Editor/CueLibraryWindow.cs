@@ -5,7 +5,7 @@ using FMODUnity;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>
     /// Tools > kinatraa > FMOD Audio > Cue Library: searchable, filterable cue list with bulk edit, validation,

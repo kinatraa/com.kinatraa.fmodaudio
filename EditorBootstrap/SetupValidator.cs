@@ -5,11 +5,11 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>
     /// Runs the Setup Wizard checks without UI. Usable from CI:
-    /// <c>Unity -batchmode -quit -projectPath . -executeMethod kinatraa.fmodaudio.Editor.SetupValidator.RunAndExit</c>
+    /// <c>Unity -batchmode -quit -projectPath . -executeMethod kinatraa.FmodAudio.Editor.SetupValidator.RunAndExit</c>
     /// (exit code 0 = no Missing items, 1 = something is missing). <see cref="Run"/> returns the result object instead.
     /// </summary>
     public static class SetupValidator

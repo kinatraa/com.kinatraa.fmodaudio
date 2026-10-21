@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>Maps a channel name to an FMOD bus.</summary>
     [Serializable]

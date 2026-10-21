@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using FMODUnity;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>When a <see cref="SoundBankLoader"/> loads its banks.</summary>
     public enum SoundBankLoadTiming

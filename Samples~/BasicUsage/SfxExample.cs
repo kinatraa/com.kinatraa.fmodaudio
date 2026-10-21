@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Samples
+namespace kinatraa.FmodAudio.Samples
 {
     /// <summary>2D, 3D and attached SFX plus a looping sound with a parameter (IMGUI buttons, no input package needed).</summary>
     public class SfxExample : MonoBehaviour

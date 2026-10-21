@@ -1,6 +1,6 @@
 {
-    "name": "kinatraa.fmodaudio",
-    "rootNamespace": "kinatraa.fmodaudio",
+    "name": "kinatraa.FmodAudio",
+    "rootNamespace": "kinatraa.FmodAudio",
     "references": [
         "FMODUnity"
     ],

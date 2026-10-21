@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Editor-only project settings (ProjectSettings/kinatraaFmodAudioSettings.asset, meant to be committed).</summary>
     [FilePath("ProjectSettings/kinatraaFmodAudioSettings.asset", FilePathAttribute.Location.ProjectFolder)]
@@ -95,7 +95,7 @@ namespace kinatraa.fmodaudio.Editor
                 sb.Append("namespace ").Append(ns).Append("\n{\n");
                 indent = "    ";
             }
-            sb.Append(indent).Append("/// <summary>Cue ids for kinatraa.fmodaudio.Sound.Play.</summary>\n");
+            sb.Append(indent).Append("/// <summary>Cue ids for kinatraa.FmodAudio.Sound.Play.</summary>\n");
             sb.Append(indent).Append("public static class ").Append(className).Append("\n").Append(indent).Append("{\n");
             var used = new HashSet<string>(StringComparer.Ordinal);
             foreach (string id in ids.Where(i => !string.IsNullOrEmpty(i)).Distinct().OrderBy(i => i, StringComparer.Ordinal))

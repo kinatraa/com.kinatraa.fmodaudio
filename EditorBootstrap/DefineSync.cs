@@ -7,7 +7,7 @@ using UnityEditor.Build;
 using UnityEditor.Compilation;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>
     /// Keeps the KINATRAA_FMOD scripting define in sync with FMOD's presence for every build target.

@@ -20,6 +20,7 @@ It does not ship FMOD and has no other dependencies. Without FMOD installed the 
 | FMOD Studio (bank authoring) | **2.03.15** | Tested. Banks must be built with FMOD Studio from the same 2.03 line as FMOD for Unity |
 | Unity | 6000.3.13f1 (macOS) | Tested with 1.0.0: compile matrix (without FMOD, FMOD added later, FMOD removed, FMOD re-imported, next to another kinatraa audio package), wizard end to end, 21 Play Mode tests + 1 Edit Mode test (domain reload disabled), macOS Mono player build |
 | Unity | 6000.3.6f1 (macOS) | Tested with 1.0.0: fresh project + FMOD + package compiles without errors or warnings, define added automatically |
+| Unity | 6000.3.13f1 (Windows) | Tested with 2.0.0 and FMOD for Unity 2.03.15: all assemblies compile, 27 Edit Mode and 6 Play Mode package tests pass |
 | Unity | 6000.3.13f1 (Windows) | Used for development. The 1.1.0 changes were compile-checked against the Unity 6000.3 / FMOD 2.03.15 APIs and their Edit Mode logic tests pass; re-run the Play Mode suite ([Tests](#tests)) to confirm on your machine |
 | Unity | 2021.3 LTS | Declared minimum (APIs chosen for it) but **not tested** |
 | FMOD for Unity 2.02 / 1.x | | **Not supported** |
@@ -32,7 +33,7 @@ download *FMOD for Unity 2.03.15* from [fmod.com/download](https://www.fmod.com/
 UPM git URL (Package Manager > + > Add package from git URL):
 
 ```
-https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.1.0
+https://github.com/kinatraa/com.kinatraa.fmodaudio.git#2.0.0
 ```
 
 Or as a git submodule (embedded package):
@@ -50,7 +51,7 @@ git submodule add https://github.com/kinatraa/com.kinatraa.fmodaudio.git Package
 5. **Tools > kinatraa > FMOD Audio > Cue Library > + From FMOD event**, then play:
 
 ```csharp
-using kinatraa.fmodaudio;
+using kinatraa.FmodAudio;
 
 Sound.Play("ui_click");                                   // 2D
 Sound.Play("explosion", hitPoint);                        // 3D at a position
@@ -109,7 +110,7 @@ Three complete examples (PlayerPrefs, JSON file, ScriptableObject): [Documentati
 
 12 checks: FMOD installed and version, scripting define, FMOD settings linked to the `.fspro`, Studio conventions (buses/snapshots, read-only),
 Unity audio disabled, listener, banks built and fresh, config asset, folders, `.gitignore`, platform sanity, Play Mode smoke test.
-CI: `Unity -batchmode -quit -projectPath . -executeMethod kinatraa.fmodaudio.Editor.SetupValidator.RunAndExit`.
+CI: `Unity -batchmode -quit -projectPath . -executeMethod kinatraa.FmodAudio.Editor.SetupValidator.RunAndExit`.
 See [Documentation~/Wizard.md](Documentation~/Wizard.md).
 
 ## Tests

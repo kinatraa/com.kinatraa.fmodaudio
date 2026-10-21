@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>
     /// Tools > kinatraa > FMOD Audio > Runtime Debugger (Play Mode): active handles with parameters, FMOD instance

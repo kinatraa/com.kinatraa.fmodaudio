@@ -1,9 +1,9 @@
 {
-    "name": "kinatraa.fmodaudio.Editor",
-    "rootNamespace": "kinatraa.fmodaudio.Editor",
+    "name": "kinatraa.FmodAudio.Editor",
+    "rootNamespace": "kinatraa.FmodAudio.Editor",
     "references": [
-        "kinatraa.fmodaudio",
-        "kinatraa.fmodaudio.bootstrap.Editor",
+        "kinatraa.FmodAudio",
+        "kinatraa.FmodAudio.Bootstrap.Editor",
         "FMODUnity",
         "FMODUnityEditor"
     ],

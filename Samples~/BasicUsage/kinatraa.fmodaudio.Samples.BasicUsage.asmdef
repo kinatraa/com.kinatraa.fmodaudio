@@ -1,8 +1,8 @@
 {
-    "name": "kinatraa.fmodaudio.Samples.BasicUsage",
-    "rootNamespace": "kinatraa.fmodaudio.Samples",
+    "name": "kinatraa.FmodAudio.Samples.BasicUsage",
+    "rootNamespace": "kinatraa.FmodAudio.Samples",
     "references": [
-        "kinatraa.fmodaudio",
+        "kinatraa.FmodAudio",
         "FMODUnity"
     ],
     "includePlatforms": [],

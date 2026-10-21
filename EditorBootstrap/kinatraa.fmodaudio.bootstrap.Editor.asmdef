@@ -1,6 +1,6 @@
 {
-    "name": "kinatraa.fmodaudio.bootstrap.Editor",
-    "rootNamespace": "kinatraa.fmodaudio.Editor",
+    "name": "kinatraa.FmodAudio.Bootstrap.Editor",
+    "rootNamespace": "kinatraa.FmodAudio.Editor",
     "references": [],
     "includePlatforms": [
         "Editor"

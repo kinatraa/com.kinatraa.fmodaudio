@@ -3,6 +3,20 @@
 All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-10-21
+
+### Changed
+- **Breaking:** namespaces `kinatraa.fmodaudio` and `kinatraa.fmodaudio.Editor` are now `kinatraa.FmodAudio` and
+  `kinatraa.FmodAudio.Editor`, and the assemblies are renamed to match (`kinatraa.FmodAudio`, `kinatraa.FmodAudio.Editor`,
+  `kinatraa.FmodAudio.Bootstrap.Editor`), following the other kinatraa packages (`kinatraa.AudioSystem`,
+  `kinatraa.PlayerPrefEditor`, ...). To migrate:
+  - replace `using kinatraa.fmodaudio;` with `using kinatraa.FmodAudio;` (and any fully qualified names);
+  - in your asmdefs, rename references to `kinatraa.fmodaudio` to `kinatraa.FmodAudio` (references by GUID keep working);
+  - update CI calls to `-executeMethod kinatraa.FmodAudio.Editor.SetupValidator.RunAndExit`;
+  - re-import the *Basic Usage* sample, or apply the two steps above to your imported copy.
+- Unchanged: saved volume and mute settings (the default key prefix stays `kinatraa.fmodaudio.`), editor preferences,
+  the `KINATRAA_FMOD` define, log labels, and serialized components and assets (script GUIDs are the same).
+
 ## [1.1.0] - 2026-10-04
 
 ### Added
@@ -72,5 +86,6 @@ All notable changes to this package are documented here. The format follows
   `SoundIds.cs` generator (Project Settings > kinatraa FMOD Audio), Play Mode runtime debugger.
 - Samples: Basic Usage, Minimal Studio Project (instructions plus an `fmodstudiocl` script and an audio generator script).
 
+[2.0.0]: https://github.com/kinatraa/com.kinatraa.fmodaudio/releases/tag/2.0.0
 [1.1.0]: https://github.com/kinatraa/com.kinatraa.fmodaudio/releases/tag/1.1.0
 [1.0.0]: https://github.com/kinatraa/com.kinatraa.fmodaudio/releases/tag/1.0.0

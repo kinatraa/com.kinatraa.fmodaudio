@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// The single central updater. It is only enabled while sounds are tracked, plays are queued or bank loads are

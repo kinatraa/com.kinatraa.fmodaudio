@@ -7,7 +7,7 @@ using FMODUnity;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Editor helpers around the FMOD for Unity settings and the FMOD Studio project (FMOD 2.03.15 public API only).</summary>
     internal static class FmodProject

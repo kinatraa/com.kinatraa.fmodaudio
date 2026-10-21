@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor.Compilation;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Result of <see cref="FmodDetector.Detect"/>.</summary>
     public enum FmodInstallState

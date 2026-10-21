@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// Lightweight identifier for a mixing channel (an FMOD bus). Built-in channels are exposed as static

@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Dropdown of cue ids for string fields marked with <see cref="SoundCueIdAttribute"/>.</summary>
     [CustomPropertyDrawer(typeof(SoundCueIdAttribute))]

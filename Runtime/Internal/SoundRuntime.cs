@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>Lives on the persistent root object; forwards application focus/pause and destruction to <see cref="Sound"/>.</summary>
     [AddComponentMenu("")]

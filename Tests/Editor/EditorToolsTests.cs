@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
-using kinatraa.fmodaudio.Editor;
+using kinatraa.FmodAudio.Editor;
 using NUnit.Framework;
 
-namespace kinatraa.fmodaudio.Tests
+namespace kinatraa.FmodAudio.Tests
 {
     /// <summary>Edit Mode tests of the editor tooling's pure logic (no FMOD banks or Play Mode needed).</summary>
     public class EditorToolsTests

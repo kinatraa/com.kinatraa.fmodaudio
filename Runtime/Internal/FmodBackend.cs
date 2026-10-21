@@ -4,7 +4,7 @@ using FMOD.Studio;
 using FMODUnity;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// The only code in the package that calls FMOD APIs. Written against FMOD for Unity 2.03.15.

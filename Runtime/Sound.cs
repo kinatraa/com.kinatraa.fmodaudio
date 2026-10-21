@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using FMODUnity;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>
     /// Static facade of the kinatraa FMOD audio system.

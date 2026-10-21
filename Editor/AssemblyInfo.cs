@@ -1,3 +1,3 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("kinatraa.fmodaudio.Tests.Editor")]
+[assembly: InternalsVisibleTo("kinatraa.FmodAudio.Tests.Editor")]

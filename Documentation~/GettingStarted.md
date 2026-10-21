@@ -10,7 +10,7 @@
 
 ## 2. Install the package
 
-- Package Manager > **+** > *Add package from git URL*: `https://github.com/kinatraa/com.kinatraa.fmodaudio.git#1.1.0`
+- Package Manager > **+** > *Add package from git URL*: `https://github.com/kinatraa/com.kinatraa.fmodaudio.git#2.0.0`
 - or `git submodule add https://github.com/kinatraa/com.kinatraa.fmodaudio.git Packages/com.kinatraa.fmodaudio`
 
 On the first compile the bootstrap editor assembly detects FMOD and adds the `KINATRAA_FMOD` scripting define to every
@@ -40,7 +40,7 @@ See [Wizard.md](Wizard.md).
 ## 5. Play
 
 ```csharp
-using kinatraa.fmodaudio;
+using kinatraa.FmodAudio;
 using UnityEngine;
 
 public class Player : MonoBehaviour
@@ -56,7 +56,7 @@ public class Player : MonoBehaviour
 }
 ```
 
-Scripts in `Assembly-CSharp` need nothing else. **Scripts inside your own asmdef must reference both `kinatraa.fmodaudio`
+Scripts in `Assembly-CSharp` need nothing else. **Scripts inside your own asmdef must reference both `kinatraa.FmodAudio`
 and `FMODUnity`** (C# needs FMODUnity to resolve the `Sound.Play(EventReference ...)` overloads).
 
 The system initializes itself before the first scene loads. To initialize manually, untick *Auto Initialize* in the

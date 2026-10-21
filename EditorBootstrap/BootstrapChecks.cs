@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>1. FMOD for Unity installed (and which version).</summary>
     internal sealed class FmodInstalledCheck : SetupCheck

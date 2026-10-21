@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using FMODUnity;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>What happens when a cue is played while it already has <see cref="SoundCue.MaxInstances"/> live instances.</summary>
     public enum SoundInstanceLimitPolicy

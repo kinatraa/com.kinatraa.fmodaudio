@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 
-namespace kinatraa.fmodaudio.Tests
+namespace kinatraa.FmodAudio.Tests
 {
     /// <summary>Edit Mode tests of runtime types that do not need FMOD running (data types, hooks, safety when not initialized).</summary>
     public class RuntimeApiEditModeTests

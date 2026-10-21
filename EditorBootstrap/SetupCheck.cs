@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Status of a setup check.</summary>
     public enum SetupStatus

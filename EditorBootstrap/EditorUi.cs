@@ -2,9 +2,9 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 
-[assembly: InternalsVisibleTo("kinatraa.fmodaudio.Editor")]
+[assembly: InternalsVisibleTo("kinatraa.FmodAudio.Editor")]
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>Shared look of the package's editor windows and inspectors (one place for menus, titles, colors and styles).</summary>
     internal static class EditorUi

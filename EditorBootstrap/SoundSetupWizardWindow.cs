@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace kinatraa.fmodaudio.Editor
+namespace kinatraa.FmodAudio.Editor
 {
     /// <summary>
     /// Tools > kinatraa > FMOD Audio > Setup Wizard. Scans the project and shows a checklist with a Fix button per item

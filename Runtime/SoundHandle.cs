@@ -1,6 +1,6 @@
 using System;
 
-namespace kinatraa.fmodaudio
+namespace kinatraa.FmodAudio
 {
     /// <summary>Playback state of a sound, mirroring FMOD's playback states.</summary>
     public enum SoundPlaybackState
